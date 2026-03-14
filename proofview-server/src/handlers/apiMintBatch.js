@@ -62,18 +62,29 @@ async function apiMintBatch(req, res, deps) {
     const links = Array.isArray(body.links) ? body.links : [];
     const file = body.file || "sample.pdf";
 
-    // token expires in 30 days for prototype
-    const exp = Date.now() + 30 * 24 * 60 * 60 * 1000;
+    const now = Date.now();
+    const exp = now + 30 * 24 * 60 * 60 * 1000;
 
-    const openToken = signToken({ messageId, recipientId, mode, exp }, deps.secret);
-    const docToken = signToken({ messageId, recipientId, file, exp }, deps.secret);
+    const openToken = signToken(
+      { messageId, recipientId, mode, iat: now, exp },
+      deps.secret
+    );
+
+    const docToken = signToken(
+      { messageId, recipientId, file, iat: now, exp },
+      deps.secret
+    );
 
     /** @type {Record<string, string>} */
     const linkMap = {};
     for (const originalUrl of links) {
       if (typeof originalUrl !== "string") continue;
-      // mint redirect token per link
-      const linkToken = signToken({ messageId, recipientId, url: originalUrl, exp }, deps.secret);
+
+      const linkToken = signToken(
+        { messageId, recipientId, url: originalUrl, iat: now, exp },
+        deps.secret
+      );
+
       linkMap[originalUrl] = `http://localhost:${deps.port}/t/l/${linkToken}`;
     }
 
