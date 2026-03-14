@@ -7,18 +7,27 @@
     "default_title": "ProofView",
     "default_popup": "popup.html"
   },
-  "background": { "service_worker": "service_worker.js" },
-  "permissions": ["storage", "alarms", "notifications"],
+  "background": {
+    "service_worker": "service_worker.js"
+  },
+  "permissions": [
+    "storage",
+    "alarms",
+    "notifications"
+  ],
   "host_permissions": [
-  "http://localhost:3000/*",
-  "http://127.0.0.1:3000/*",
-  "https://mail.google.com/*"
-]
-,
+    "http://localhost:3000/*",
+    "http://127.0.0.1:3000/*",
+    "https://mail.google.com/*"
+  ],
   "content_scripts": [
     {
-      "matches": ["https://mail.google.com/*"],
-      "js": ["gmail_content.js"],
+      "matches": [
+        "https://mail.google.com/*"
+      ],
+      "js": [
+        "gmail_content.js"
+      ],
       "run_at": "document_idle"
     }
   ],

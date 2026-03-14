@@ -26,8 +26,7 @@ const composeState = new WeakMap();
  * @returns {Promise<string>}
  */
 async function getServerBaseUrl() {
-  const data = await chrome.storage.local.get(["serverBaseUrl"]);
-  return typeof data.serverBaseUrl === "string" ? data.serverBaseUrl : DEFAULT_SERVER_BASE_URL;
+  return DEFAULT_SERVER_BASE_URL;
 }
 
 /**
@@ -136,7 +135,7 @@ function rewriteLinks(body, linkMap) {
 function createTrackButton(root) {
   const btn = document.createElement("button");
   btn.type = "button";
-  btn.textContent = "Track with ProofView";
+  btn.textContent = "Track Email";
   btn.setAttribute("data-proofview", "track-btn");
 
   // Small overlay button inside compose (less fragile than Gmail toolbar hooks)
@@ -175,7 +174,7 @@ function setButtonState(btn, tracked, extra = "") {
     btn.textContent = extra ? `Tracked ✅ (${extra})` : "Tracked ✅";
     btn.style.opacity = "0.85";
   } else {
-    btn.textContent = extra ? `Track with ProofView (${extra})` : "Track with ProofView";
+    btn.textContent = extra ? `Track Email (${extra})` : "Track Email";
     btn.style.opacity = "1";
   }
 }
@@ -187,20 +186,38 @@ function setButtonState(btn, tracked, extra = "") {
  * @returns {Promise<{messageId: string, openUrl: string, linkMap: Record<string,string>}>}
  */
 async function mintBatch(baseUrl, payload) {
-  const url = new URL("/api/mint-batch", baseUrl).toString();
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
-  });
+  return new Promise((resolve, reject) => {
+    chrome.runtime.sendMessage(
+      {
+        type: "proofview:mint-batch",
+        baseUrl,
+        payload
+      },
+      (response) => {
+        const lastError = chrome.runtime.lastError;
+        if (lastError) {
+          reject(new Error(lastError.message));
+          return;
+        }
 
-  if (!res.ok) throw new Error(`Mint failed: HTTP ${res.status}`);
-  const data = await res.json();
-  return {
-    messageId: data.messageId,
-    openUrl: data.openUrl,
-    linkMap: data.linkMap || {}
-  };
+        if (!response) {
+          reject(new Error("No response from extension service worker"));
+          return;
+        }
+
+        if (!response.ok) {
+          reject(new Error(response.error || "Mint request failed"));
+          return;
+        }
+
+        resolve({
+          messageId: response.data.messageId,
+          openUrl: response.data.openUrl,
+          linkMap: response.data.linkMap || {}
+        });
+      }
+    );
+  });
 }
 
 /**
@@ -253,7 +270,9 @@ function ensureComposeIntegration(root) {
 
       setButtonState(btn, true, `${rewritten} links`);
     } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
       console.error("ProofView Gmail integration error:", err);
+      alert(`ProofView error: ${msg}`);
       setButtonState(btn, false, "error");
     } finally {
       btn.disabled = false;

@@ -1,0 +1,77 @@
+{
+  "events": [
+    {
+      "at": 1773468355031,
+      "type": "open",
+      "messageId": "pv_1773468343359_97b520",
+      "recipientId": null,
+      "meta": {
+        "mode": "pixel",
+        "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36",
+        "ip": "::1"
+      }
+    },
+    {
+      "at": 1773468364105,
+      "type": "open",
+      "messageId": "pv_1773468343359_97b520",
+      "recipientId": null,
+      "meta": {
+        "mode": "pixel",
+        "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36",
+        "ip": "::1"
+      }
+    },
+    {
+      "at": 1773481410149,
+      "type": "open",
+      "messageId": "pv_1773481380191_c930d5",
+      "recipientId": null,
+      "meta": {
+        "mode": "pixel",
+        "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36",
+        "ip": "::1"
+      }
+    },
+    {
+      "at": 1773481442772,
+      "type": "open",
+      "messageId": "pv_1773481380191_c930d5",
+      "recipientId": null,
+      "meta": {
+        "mode": "pixel",
+        "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36",
+        "ip": "::1"
+      }
+    },
+    {
+      "at": 1773482047566,
+      "type": "open",
+      "messageId": "pv_1773481380191_c930d5",
+      "recipientId": null,
+      "meta": {
+        "mode": "pixel",
+        "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36",
+        "ip": "::1"
+      }
+    }
+  ],
+  "counters": {
+    "pv_1773468343359_97b520": {
+      "opens": 2,
+      "clicks": 0,
+      "downloads": 0,
+      "lastOpenAt": 1773468364105,
+      "lastClickAt": null,
+      "lastDownloadAt": null
+    },
+    "pv_1773481380191_c930d5": {
+      "opens": 3,
+      "clicks": 0,
+      "downloads": 0,
+      "lastOpenAt": 1773482047566,
+      "lastClickAt": null,
+      "lastDownloadAt": null
+    }
+  }
+}

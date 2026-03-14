@@ -201,3 +201,42 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   }
   return false;
 });
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message?.type === "proofview:mint-batch") {
+    (async () => {
+      try {
+        const { baseUrl, payload } = message;
+        const url = new URL("/api/mint-batch", baseUrl).toString();
+
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+
+        if (!res.ok) {
+          sendResponse({
+            ok: false,
+            error: `Mint failed: HTTP ${res.status}`
+          });
+          return;
+        }
+
+        const data = await res.json();
+
+        sendResponse({
+          ok: true,
+          data
+        });
+      } catch (err) {
+        sendResponse({
+          ok: false,
+          error: err instanceof Error ? err.message : String(err)
+        });
+      }
+    })();
+
+    return true; // keeps sendResponse alive for async work
+  }
+});
