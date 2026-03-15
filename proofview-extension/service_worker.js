@@ -156,6 +156,38 @@ function ensureServerBaseUrl(baseUrl) {
   return baseUrl;
 }
 
+async function openFocusedEntry(messageId) {
+  const safeMessageId = typeof messageId === "string" ? messageId : "";
+  if (!safeMessageId) {
+    throw new Error("messageId is required");
+  }
+
+  await chrome.storage.local.set({
+    focusMessageId: safeMessageId,
+    focusRequestedAt: Date.now()
+  });
+
+  if (chrome.action?.openPopup) {
+    try {
+      await chrome.action.openPopup();
+      return { opened: "popup" };
+    } catch (err) {
+      console.debug("ProofView popup open fallback:", err);
+    }
+  }
+
+  const focusUrl = chrome.runtime.getURL(
+    `popup.html?focus=${encodeURIComponent(safeMessageId)}`
+  );
+
+  if (self.clients?.openWindow) {
+    await self.clients.openWindow(focusUrl);
+    return { opened: "window" };
+  }
+
+  throw new Error("Unable to open ProofView entry");
+}
+
 async function postJson(baseUrl, pathname, body) {
   const url = new URL(pathname, baseUrl).toString();
   const res = await fetch(url, {
@@ -258,6 +290,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     startPolling();
     sendResponse({ ok: true });
     return true;
+  }
+
+  if (message?.type === "proofview:open-entry") {
+    return respondAsync(sendResponse, async () => {
+      const result = await openFocusedEntry(message.messageId);
+      return { ok: true, ...result };
+    });
   }
 });
 

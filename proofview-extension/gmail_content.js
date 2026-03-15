@@ -13,9 +13,12 @@
  * }>} */
 const composeState = new WeakMap();
 const bridgedOpenUrls = new Set();
+const ROW_BADGE_STYLE_ID = "proofview-row-badge-style";
 const LOCAL_OPEN_URL_RE = buildLocalOpenUrlPattern(
   globalThis.PROOFVIEW_EXTENSION_CONFIG?.serverBaseUrl || ""
 );
+let trackedMessages = [];
+let scanScheduled = false;
 
 function generateMessageId() {
   const rand = Math.random().toString(16).slice(2, 8);
@@ -60,6 +63,230 @@ function sendExtensionMessage(message) {
       resolve(response);
     });
   });
+}
+
+function normalizeText(value) {
+  return typeof value === "string"
+    ? value.replace(/\s+/g, " ").trim().toLowerCase()
+    : "";
+}
+
+function getTrackedEntries(statusMap, messageMeta) {
+  const ids = new Set([
+    ...Object.keys(statusMap || {}),
+    ...Object.keys(messageMeta || {})
+  ]);
+
+  return Array.from(ids)
+    .map((messageId) => {
+      const entry = messageMeta?.[messageId];
+      const subject =
+        typeof entry?.subject === "string" && entry.subject.trim()
+          ? entry.subject.trim()
+          : "No subject";
+      const status =
+        statusMap?.[messageId] ||
+        (Array.isArray(entry?.openEvents) && entry.openEvents.length > 0
+          ? "opened"
+          : entry?.sentAt
+            ? "sent"
+            : "tracked");
+
+      return {
+        messageId,
+        status,
+        subject,
+        subjectNormalized: normalizeText(subject),
+        lastActivityAt:
+          (Array.isArray(entry?.openEvents) && entry.openEvents[0]) ||
+          entry?.sentAt ||
+          entry?.trackedAt ||
+          0
+      };
+    })
+    .filter((entry) => entry.subjectNormalized && entry.subjectNormalized !== "no subject")
+    .sort((a, b) => {
+      if (b.lastActivityAt !== a.lastActivityAt) {
+        return b.lastActivityAt - a.lastActivityAt;
+      }
+
+      if (b.subjectNormalized.length !== a.subjectNormalized.length) {
+        return b.subjectNormalized.length - a.subjectNormalized.length;
+      }
+
+      return String(b.messageId).localeCompare(String(a.messageId));
+    });
+}
+
+function loadTrackedMessages() {
+  chrome.storage.local.get(["statusMap", "messageMeta"], (data) => {
+    trackedMessages = getTrackedEntries(data?.statusMap, data?.messageMeta);
+    scheduleScan();
+  });
+}
+
+function ensureRowBadgeStyles() {
+  if (document.getElementById(ROW_BADGE_STYLE_ID)) {
+    return;
+  }
+
+  const style = document.createElement("style");
+  style.id = ROW_BADGE_STYLE_ID;
+  style.textContent = `
+    .proofview-row-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 26px;
+      height: 20px;
+      margin-left: 8px;
+      padding: 0 7px;
+      border: 1px solid rgba(122, 135, 153, 0.34);
+      border-radius: 999px;
+      background: rgba(235, 239, 244, 0.88);
+      color: #59677a;
+      font-size: 11px;
+      font-weight: 700;
+      line-height: 1;
+      cursor: pointer;
+      transition:
+        transform 160ms ease,
+        box-shadow 160ms ease,
+        border-color 160ms ease,
+        background 160ms ease,
+        color 160ms ease;
+    }
+
+    .proofview-row-badge:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 8px 18px rgba(17, 24, 39, 0.12);
+    }
+
+    .proofview-row-badge[data-state="opened"] {
+      border-color: rgba(37, 99, 235, 0.28);
+      background: rgba(219, 234, 254, 0.96);
+      color: #1d4ed8;
+      box-shadow: 0 8px 16px rgba(37, 99, 235, 0.14);
+    }
+  `;
+
+  document.head.appendChild(style);
+}
+
+function findMessageListRows() {
+  return Array.from(document.querySelectorAll('tr[role="row"]')).filter((row) => {
+    return !!row.querySelector("td") && !row.closest('div[role="dialog"]');
+  });
+}
+
+function getRowBadgeHost(row) {
+  const subject = row.querySelector("span.bog");
+  if (subject?.parentElement) {
+    return subject.parentElement;
+  }
+
+  return (
+    row.querySelector("td:nth-last-child(2) .y6") ||
+    row.querySelector("td:nth-last-child(2)") ||
+    null
+  );
+}
+
+function findTrackedEntryForRow(row) {
+  const rowText = normalizeText(row.innerText || row.textContent || "");
+  if (!rowText || !rowText.includes("to:")) {
+    return null;
+  }
+
+  for (const entry of trackedMessages) {
+    if (rowText.includes(entry.subjectNormalized)) {
+      return entry;
+    }
+  }
+
+  return null;
+}
+
+async function openTrackedEntry(messageId) {
+  const response = await sendExtensionMessage({
+    type: "proofview:open-entry",
+    messageId
+  });
+
+  if (response?.ok) {
+    return response;
+  }
+
+  const focusUrl = chrome.runtime.getURL(
+    `popup.html?focus=${encodeURIComponent(messageId)}`
+  );
+  window.open(focusUrl, "_blank", "noopener");
+  return response;
+}
+
+function upsertRowBadge(row, entry) {
+  const existing = row.querySelector('button[data-proofview="row-badge"]');
+  if (!entry) {
+    if (existing) {
+      existing.remove();
+    }
+    return;
+  }
+
+  const host = getRowBadgeHost(row);
+  if (!host) {
+    return;
+  }
+
+  const badge = existing || document.createElement("button");
+  if (!existing) {
+    const haltEvent = (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+    };
+
+    badge.type = "button";
+    badge.setAttribute("data-proofview", "row-badge");
+    badge.className = "proofview-row-badge";
+    badge.addEventListener("mousedown", haltEvent);
+    badge.addEventListener("mouseup", haltEvent);
+    badge.addEventListener("pointerdown", haltEvent);
+    badge.addEventListener("click", async (event) => {
+      haltEvent(event);
+
+      const messageId = badge.dataset.messageId || "";
+      if (!messageId) {
+        return;
+      }
+
+      try {
+        badge.disabled = true;
+        await openTrackedEntry(messageId);
+      } catch (err) {
+        console.error("ProofView row badge open failed:", err);
+      } finally {
+        badge.disabled = false;
+      }
+    });
+  }
+
+  badge.dataset.messageId = entry.messageId;
+  badge.dataset.state = entry.status;
+  badge.textContent = entry.status === "opened" ? "✓✓" : "✓";
+  badge.title =
+    entry.status === "opened"
+      ? `${entry.subject} was opened`
+      : `${entry.subject} is being tracked`;
+  badge.setAttribute(
+    "aria-label",
+    entry.status === "opened"
+      ? `Opened tracked email ${entry.subject}`
+      : `Tracked email ${entry.subject}`
+  );
+
+  if (badge.parentElement !== host) {
+    host.appendChild(badge);
+  }
 }
 
 function findComposeRoots() {
@@ -239,6 +466,15 @@ function bridgeVisibleTrackedOpens() {
   }
 }
 
+function updateVisibleRowBadges() {
+  ensureRowBadgeStyles();
+
+  const rows = findMessageListRows();
+  for (const row of rows) {
+    upsertRowBadge(row, findTrackedEntryForRow(row));
+  }
+}
+
 function findSendButton(root) {
   return (
     root.querySelector('div[role="button"][data-tooltip^="Send"]') ||
@@ -344,12 +580,38 @@ function scan() {
   for (const r of roots) ensureComposeIntegration(r);
 
   bridgeVisibleTrackedOpens();
+  updateVisibleRowBadges();
+}
+
+function scheduleScan() {
+  if (scanScheduled) {
+    return;
+  }
+
+  scanScheduled = true;
+  window.requestAnimationFrame(() => {
+    scanScheduled = false;
+    scan();
+  });
 }
 
 function startObserver() {
-  const obs = new MutationObserver(() => scan());
+  const obs = new MutationObserver(() => scheduleScan());
   obs.observe(document.documentElement, { childList: true, subtree: true });
-  scan();
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName !== "local") {
+      return;
+    }
+
+    if (!changes.statusMap && !changes.messageMeta) {
+      return;
+    }
+
+    loadTrackedMessages();
+  });
+
+  loadTrackedMessages();
+  scheduleScan();
 }
 
 startObserver();

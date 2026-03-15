@@ -2,6 +2,9 @@ let currentEntries = [];
 let pendingDelete = null;
 let isMenuOpen = false;
 let lastEntriesSignature = "";
+const focusParams = new URLSearchParams(window.location.search);
+let focusedMessageId =
+  typeof focusParams.get("focus") === "string" ? focusParams.get("focus") : "";
 
 function sendExtensionMessage(message) {
   return new Promise((resolve, reject) => {
@@ -120,6 +123,14 @@ function setStatusNote(text = "") {
   }
 }
 
+function escapeAttributeValue(value) {
+  if (globalThis.CSS?.escape) {
+    return globalThis.CSS.escape(value);
+  }
+
+  return String(value).replace(/["\\]/g, "\\$&");
+}
+
 function syncMenuState() {
   const menuBtn = document.getElementById("menuBtn");
   const menuPanel = document.getElementById("menuPanel");
@@ -230,6 +241,10 @@ function renderMessages(entries) {
   for (const entry of entries) {
     const row = document.createElement("section");
     row.className = "msg";
+    row.dataset.messageId = entry.messageId;
+    if (focusedMessageId && entry.messageId === focusedMessageId) {
+      row.classList.add("focused");
+    }
 
     const head = document.createElement("div");
     head.className = "card-head";
@@ -286,6 +301,17 @@ function renderMessages(entries) {
 
     container.appendChild(row);
   }
+
+  if (focusedMessageId) {
+    const selector = `.msg[data-message-id="${escapeAttributeValue(focusedMessageId)}"]`;
+    const focusedRow = container.querySelector(selector);
+    if (focusedRow) {
+      focusedRow.scrollIntoView({ block: "center", behavior: "smooth" });
+      setStatusNote("");
+    } else {
+      setStatusNote("Tracked email not found.");
+    }
+  }
 }
 
 function loadMessages(options = {}) {
@@ -302,6 +328,27 @@ function loadMessages(options = {}) {
 
     lastEntriesSignature = nextSignature;
     renderMessages(currentEntries);
+  });
+}
+
+function resolveFocusedMessageId() {
+  if (focusedMessageId) {
+    chrome.storage.local.remove(["focusMessageId", "focusRequestedAt"]);
+    return Promise.resolve(focusedMessageId);
+  }
+
+  return new Promise((resolve) => {
+    chrome.storage.local.get(["focusMessageId"], (data) => {
+      const storedFocus =
+        data && typeof data.focusMessageId === "string" ? data.focusMessageId : "";
+      focusedMessageId = storedFocus;
+
+      if (storedFocus) {
+        chrome.storage.local.remove(["focusMessageId", "focusRequestedAt"]);
+      }
+
+      resolve(focusedMessageId);
+    });
   });
 }
 
@@ -383,5 +430,7 @@ document.addEventListener("DOMContentLoaded", () => {
     chrome.storage.onChanged.removeListener(handleStorageChange);
   });
 
-  loadMessages({ force: true });
+  resolveFocusedMessageId().finally(() => {
+    loadMessages({ force: true });
+  });
 });
