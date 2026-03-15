@@ -13,14 +13,13 @@ const fs = require("fs");
  * @returns {void}
  */
 function sendJson(res, status, data) {
-  const body = Buffer.from(JSON.stringify(data), "utf8");
   res.writeHead(status, {
     "Content-Type": "application/json; charset=utf-8",
-    "Content-Length": body.length,
-    "Cache-Control": "no-store"
+    "Access-Control-Allow-Origin": "*"
   });
-  res.end(body);
+  res.end(JSON.stringify(data));
 }
+
 
 /**
  * @description Send text response.
@@ -29,14 +28,13 @@ function sendJson(res, status, data) {
  * @param {string} text
  * @returns {void}
  */
+
 function sendText(res, status, text) {
-  const body = Buffer.from(text, "utf8");
   res.writeHead(status, {
     "Content-Type": "text/plain; charset=utf-8",
-    "Content-Length": body.length,
-    "Cache-Control": "no-store"
+    "Access-Control-Allow-Origin": "*"
   });
-  res.end(body);
+  res.end(text);
 }
 
 /**
@@ -45,15 +43,15 @@ function sendText(res, status, text) {
  * @param {Buffer} pngBytes
  * @returns {void}
  */
-function sendPng(res, pngBytes) {
+function sendPng(res, buffer) {
   res.writeHead(200, {
     "Content-Type": "image/png",
-    "Content-Length": pngBytes.length,
     "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
     "Pragma": "no-cache",
-    "Expires": "0"
+    "Expires": "0",
+    "Access-Control-Allow-Origin": "*"
   });
-  res.end(pngBytes);
+  res.end(buffer);
 }
 
 /**

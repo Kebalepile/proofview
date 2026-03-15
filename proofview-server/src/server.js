@@ -4,26 +4,18 @@
  */
 
 const http = require("http");
-const { URL } = require("url");
-const { getConfig } = require("./lib/config");
-const { route } = require("./router");
-const store = require("./lib/store");
+const { router } = require("./router");
 
-const config = getConfig();
+const PORT = 3000;
+const SECRET = "proofview-dev-secret-change-me";
 
-// Init store (JSON file DB for prototype)
-store.initStore(config.storageFile);
+const server = http.createServer((req, res) => {
+  router(req, res, {
+    port: PORT,
+    secret: SECRET
+  });
+});
 
-http.createServer((req, res) => {
-  try {
-    const urlObj = new URL(req.url, `http://${req.headers.host}`);
-    route(req, res, urlObj, config);
-  } catch (err) {
-    console.error("Unhandled error:", err);
-    res.writeHead(500, { "Content-Type": "text/plain; charset=utf-8" });
-    res.end("Internal server error");
-  }
-}).listen(config.port, () => {
-  console.log(`ProofView listening on http://localhost:${config.port}`);
-  // console.log(`Set PROOFVIEW_SECRET env var for real usage.`);
+server.listen(PORT, () => {
+  console.log(`ProofView server listening on http://localhost:${PORT}`);
 });

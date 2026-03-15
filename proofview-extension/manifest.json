@@ -1,15 +1,8 @@
 {
   "manifest_version": 3,
   "name": "ProofView",
-  "version": "0.2.0",
-  "description": "ProofView tracking + Gmail compose integration (MVP).",
-  "action": {
-    "default_title": "ProofView",
-    "default_popup": "popup.html"
-  },
-  "background": {
-    "service_worker": "service_worker.js"
-  },
+  "version": "1.0.0",
+  "description": "Minimal Gmail email tracking MVP",
   "permissions": [
     "storage",
     "alarms",
@@ -20,6 +13,13 @@
     "http://127.0.0.1:3000/*",
     "https://mail.google.com/*"
   ],
+  "background": {
+    "service_worker": "service_worker.js"
+  },
+  "action": {
+    "default_title": "ProofView",
+    "default_popup": "popup.html"
+  },
   "content_scripts": [
     {
       "matches": [

@@ -1,43 +1,30 @@
-<!doctype html>
+<!DOCTYPE html>
 <html>
   <head>
-    <meta charset="utf-8" />
-    <title>ProofView</title>
+    <meta charset="UTF-8" />
     <style>
-      body { font-family: Arial, sans-serif; margin: 12px; width: 360px; }
-      .row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
-      input { flex: 1; padding: 8px; }
-      button { padding: 8px 10px; cursor: pointer; }
-      .small { color: #666; font-size: 12px; }
-      .events { border-top: 1px solid #eee; margin-top: 10px; padding-top: 10px; }
-      .evt { padding: 8px 0; border-bottom: 1px solid #f2f2f2; }
-      .evt:last-child { border-bottom: none; }
-      .tag { display: inline-block; font-size: 11px; padding: 2px 6px; border: 1px solid #ddd; border-radius: 10px; margin-right: 6px; }
-      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+      body {
+        font-family: sans-serif;
+        margin: 10px;
+        min-width: 320px;
+      }
+
+      h1 {
+        margin: 0 0 10px 0;
+        font-size: 14px;
+      }
+
+      .msg {
+        margin-top: 8px;
+        border-bottom: 1px solid #eee;
+        padding-bottom: 4px;
+        font-size: 12px;
+      }
     </style>
   </head>
   <body>
-    <h3 style="margin:0 0 8px 0;">ProofView</h3>
-
-    <div class="row">
-      <input id="serverBaseUrl" placeholder="Server base URL" />
-      <button id="save">Save</button>
-    </div>
-
-    <div class="row">
-      <button id="pollNow">Poll now</button>
-      <button id="clearCursor">Reset cursor</button>
-    </div>
-
-    <div class="small">
-      Status: <span id="statusText">—</span>
-    </div>
-
-    <div class="events">
-      <div class="small" style="margin-bottom:6px;">Latest events</div>
-      <div id="events"></div>
-    </div>
-
+    <h1>Tracked Emails</h1>
+    <div id="messages"></div>
     <script src="popup.js"></script>
   </body>
 </html>

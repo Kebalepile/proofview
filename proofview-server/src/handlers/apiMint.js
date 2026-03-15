@@ -24,18 +24,18 @@ function apiMint(res, urlObj, deps) {
   const file = urlObj.searchParams.get("file") || "sample.pdf";
 
   const now = Date.now();
-  const exp = now + 30 * 24 * 60 * 60 * 1000;
+  const exp = now + 30 * 24 * 60 * 60 * 1000; // expire in 30 days
 
   const openToken = signToken({ messageId, recipientId, mode, iat: now, exp }, deps.secret);
   const linkToken = signToken({ messageId, recipientId, url, iat: now, exp }, deps.secret);
-  const docToken = signToken({ messageId, recipientId, file, iat: now, exp }, deps.secret);
+  const docToken  = signToken({ messageId, recipientId, file, iat: now, exp }, deps.secret);
 
   sendJson(res, 200, {
     messageId,
     recipientId,
     openUrl: `http://localhost:${deps.port}/t/o/${openToken}.png`,
     linkUrl: `http://localhost:${deps.port}/t/l/${linkToken}`,
-    docUrl: `http://localhost:${deps.port}/t/d/${docToken}`
+    docUrl:  `http://localhost:${deps.port}/t/d/${docToken}`
   });
 }
 
