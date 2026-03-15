@@ -13,6 +13,7 @@
  * }>} */
 const composeState = new WeakMap();
 const bridgedOpenUrls = new Set();
+const COMPOSE_BUTTON_STYLE_ID = "proofview-compose-button-style";
 const ROW_BADGE_STYLE_ID = "proofview-row-badge-style";
 const LOCAL_OPEN_URL_RE = buildLocalOpenUrlPattern(
   globalThis.PROOFVIEW_EXTENSION_CONFIG?.serverBaseUrl || ""
@@ -123,6 +124,105 @@ function loadTrackedMessages() {
     trackedMessages = getTrackedEntries(data?.statusMap, data?.messageMeta);
     scheduleScan();
   });
+}
+
+function hasVisiblePaint(value) {
+  return typeof value === "string" && value && value !== "rgba(0, 0, 0, 0)" && value !== "transparent";
+}
+
+function ensureComposeButtonStyles() {
+  if (document.getElementById(COMPOSE_BUTTON_STYLE_ID)) {
+    return;
+  }
+
+  const style = document.createElement("style");
+  style.id = COMPOSE_BUTTON_STYLE_ID;
+  style.textContent = `
+    .proofview-track-btn {
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      z-index: 999999;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 24px;
+      height: auto;
+      padding: 4px 12px;
+      border: 1px solid var(--pv-track-border, #0b57d0);
+      border-radius: 5px;
+      background: var(--pv-track-bg, #0b57d0);
+      color: var(--pv-track-fg, #ffffff);
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.2;
+      letter-spacing: 0.01em;
+      cursor: pointer;
+      box-shadow: 0 12px 24px rgba(11, 87, 208, 0.22);
+      transform: translateX(-50%) translateY(0);
+      transition:
+        transform 160ms ease,
+        box-shadow 160ms ease,
+        filter 160ms ease,
+        opacity 160ms ease;
+    }
+
+    .proofview-track-btn:hover:not(:disabled) {
+      transform: translateX(-50%) translateY(-1px);
+      filter: brightness(1.04);
+      box-shadow: 0 16px 28px rgba(11, 87, 208, 0.28);
+    }
+
+    .proofview-track-btn:active:not(:disabled) {
+      transform: translateX(-50%) translateY(0);
+      filter: brightness(0.98);
+      box-shadow: 0 8px 18px rgba(11, 87, 208, 0.22);
+    }
+
+    .proofview-track-btn[data-proofview-state="tracked"] {
+      filter: saturate(0.94);
+    }
+
+    .proofview-track-btn[data-proofview-state="working"] {
+      cursor: progress;
+      opacity: 0.92;
+    }
+
+    .proofview-track-btn[data-proofview-state="error"] {
+      background: #b3261e;
+      border-color: #b3261e;
+      color: #ffffff;
+      box-shadow: 0 12px 24px rgba(179, 38, 30, 0.22);
+    }
+  `;
+
+  document.head.appendChild(style);
+}
+
+function getComposeButtonTheme(root) {
+  const fallback = {
+    background: "#0b57d0",
+    color: "#ffffff",
+    border: "#0b57d0"
+  };
+  const sendBtn = findSendButton(root);
+  if (!sendBtn) {
+    return fallback;
+  }
+
+  const style = window.getComputedStyle(sendBtn);
+  return {
+    background: hasVisiblePaint(style.backgroundColor) ? style.backgroundColor : fallback.background,
+    color: hasVisiblePaint(style.color) ? style.color : fallback.color,
+    border: hasVisiblePaint(style.borderColor) ? style.borderColor : fallback.border
+  };
+}
+
+function applyComposeButtonTheme(btn, root) {
+  const theme = getComposeButtonTheme(root);
+  btn.style.setProperty("--pv-track-bg", theme.background);
+  btn.style.setProperty("--pv-track-fg", theme.color);
+  btn.style.setProperty("--pv-track-border", theme.border || theme.background);
 }
 
 function ensureRowBadgeStyles() {
@@ -370,23 +470,15 @@ function rewriteLinks(body, linkMap) {
 }
 
 function createTrackButton(root) {
+  ensureComposeButtonStyles();
+
   const btn = document.createElement("button");
   btn.type = "button";
   btn.textContent = "Track Email";
   btn.setAttribute("data-proofview", "track-btn");
-
-  btn.style.cssText = [
-    "position:absolute",
-    "top:10px",
-    "right:14px",
-    "z-index:999999",
-    "padding:6px 10px",
-    "border:1px solid #ddd",
-    "border-radius:999px",
-    "background:#fff",
-    "font-size:12px",
-    "cursor:pointer"
-  ].join(";");
+  btn.className = "proofview-track-btn";
+  btn.dataset.proofviewState = "idle";
+  applyComposeButtonTheme(btn, root);
 
   const computed = window.getComputedStyle(root);
   if (computed.position === "static") {
@@ -398,12 +490,20 @@ function createTrackButton(root) {
 }
 
 function setButtonState(btn, tracked, extra = "") {
+  if (extra === "error") {
+    btn.dataset.proofviewState = "error";
+  } else if (extra === "working...") {
+    btn.dataset.proofviewState = "working";
+  } else if (tracked) {
+    btn.dataset.proofviewState = "tracked";
+  } else {
+    btn.dataset.proofviewState = "idle";
+  }
+
   if (tracked) {
     btn.textContent = extra ? `Tracked ✅ (${extra})` : "Tracked ✅";
-    btn.style.opacity = "0.85";
   } else {
     btn.textContent = extra ? `Track Email (${extra})` : "Track Email";
-    btn.style.opacity = "1";
   }
 }
 
