@@ -8,11 +8,13 @@
   left: 50%;
   z-index: 999999;
   display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px;
+  align-items: stretch;
+  width: min(280px, calc(100% - 24px));
+  max-width: calc(100% - 24px);
+  gap: 0;
+  padding: 0;
   border: 1px solid rgba(15, 23, 42, 0.08);
-  border-radius: 10px;
+  border-radius: 7px;
   background: rgba(255, 255, 255, 0.96);
   box-shadow:
     0 16px 34px rgba(15, 23, 42, 0.16),
@@ -26,11 +28,14 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 24px;
+  flex: 1 1 0;
+  width: 100%;
+  min-width: 0;
+  min-height: 28px;
   height: auto;
-  padding: 4px 12px;
+  padding: 6px 12px;
   border: 1px solid transparent;
-  border-radius: 5px;
+  border-radius: 0;
   background: #ffffff;
   color: #3c4043;
   font-size: 12px;
@@ -47,18 +52,30 @@
     opacity 160ms ease;
 }
 
+.proofview-compose-actions[data-layout="single"] .proofview-track-btn {
+  border-radius: 5px;
+}
+
+.proofview-compose-actions[data-layout="split"] .proofview-track-btn {
+  border-radius: 5px 0 0 5px;
+}
+
+.proofview-compose-actions[data-layout="split"] .proofview-untrack-btn {
+  border-radius: 0 5px 5px 0;
+}
+
 .proofview-track-btn {
   border-color: #ffffff;
   background: #ffffff;
   color: #3c4043;
-  box-shadow: 0 8px 18px rgba(60, 64, 67, 0.12);
+  box-shadow: none;
 }
 
 .proofview-untrack-btn {
   border-color: #d93025;
   background: linear-gradient(180deg, #fff4f2 0%, #fee7e4 100%);
   color: #b42318;
-  box-shadow: 0 8px 18px rgba(217, 48, 37, 0.14);
+  box-shadow: none;
 }
 
 .proofview-track-btn:hover:not(:disabled),
@@ -76,7 +93,7 @@
   border-color: #ffffff;
   background: linear-gradient(180deg, #374151 0%, #1f2937 100%);
   color: #ffffff;
-  box-shadow: 0 10px 22px rgba(17, 24, 39, 0.2);
+  box-shadow: none;
 }
 
 .proofview-track-btn[data-proofview-state="working"],
@@ -145,10 +162,10 @@
 }
 
 .proofview-pixel {
-  width: 20px;
-  height: 20px;
-  display: inline-block;
-  vertical-align: middle;
-  margin-left: 8px;
-  border-radius: 6px;
+  width: 38px;
+  height: 38px;
+  display: block;
+  margin: 12px 0 0 auto;
+  border-radius: 10px;
+  object-fit: contain;
 }

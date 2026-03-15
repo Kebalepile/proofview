@@ -360,28 +360,28 @@ function injectPixel(body, openUrl) {
   const existing = body.querySelector('img[data-proofview="pixel"]');
   if (existing) {
     existing.src = openUrl;
-    existing.alt = "ProofView";
-    existing.title = "ProofView";
-    existing.width = 20;
-    existing.height = 20;
+    existing.alt = "ProofView logo";
+    existing.title = "ProofView logo";
+    existing.width = 38;
+    existing.height = 38;
     existing.setAttribute(
       "style",
-      "display:inline-block;width:20px;height:20px;margin-left:8px;vertical-align:middle;border-radius:6px;"
+      "display:block;width:38px;height:38px;margin:12px 0 0 auto;border-radius:10px;object-fit:contain;"
     );
     return;
   }
 
   const img = document.createElement("img");
   img.setAttribute("data-proofview", "pixel");
-  img.alt = "ProofView";
-  img.title = "ProofView";
+  img.alt = "ProofView logo";
+  img.title = "ProofView logo";
   img.className = "proofview-pixel";
   img.src = openUrl;
-  img.width = 20;
-  img.height = 20;
+  img.width = 38;
+  img.height = 38;
   img.setAttribute(
     "style",
-    "display:inline-block;width:20px;height:20px;margin-left:8px;vertical-align:middle;border-radius:6px;"
+    "display:block;width:38px;height:38px;margin:12px 0 0 auto;border-radius:10px;object-fit:contain;"
   );
 
   body.appendChild(img);
@@ -451,6 +451,7 @@ function createComposeControls(root) {
   const actions = document.createElement("div");
   actions.className = "proofview-compose-actions";
   actions.setAttribute("data-proofview", "compose-actions");
+  actions.dataset.layout = "single";
 
   const trackBtn = document.createElement("button");
   trackBtn.type = "button";
@@ -499,6 +500,7 @@ function setButtonState(btn, tracked, extra = "") {
 
 function setComposeActionState(trackBtn, untrackBtn, mode, label = "") {
   const nextMode = typeof mode === "string" ? mode : "idle";
+  const actions = trackBtn.parentElement;
   const trackLabel =
     label ||
     (
@@ -515,6 +517,10 @@ function setComposeActionState(trackBtn, untrackBtn, mode, label = "") {
   untrackBtn.dataset.proofviewState = nextMode;
   trackBtn.textContent = trackLabel;
   untrackBtn.textContent = "Untrack";
+
+  if (actions) {
+    actions.dataset.layout = nextMode === "tracked" ? "split" : "single";
+  }
 
   trackBtn.disabled =
     nextMode === "working" || nextMode === "tracked" || nextMode === "sent";
