@@ -1,12 +1,12 @@
 /**
- * ProofView Gmail Compose Integration (Vanilla JS)
+ * ProofView Gmail integration (Vanilla JS).
  *
- * IMPORTANT:
- * This version does NOT use chrome.runtime.sendMessage().
- * It talks directly to the local ProofView server with fetch().
+ * Compose actions go through the extension service worker so tracked/sent
+ * status stays consistent, and local Gmail message views can bridge opens
+ * back to a localhost server for development testing.
  */
 
-const DEFAULT_SERVER_BASE_URL = "http://localhost:3000";
+const LOCAL_OPEN_URL_RE = /^https?:\/\/(?:localhost|127\.0\.0\.1):\d+\/t\/o\/.+\.png(?:\?.*)?$/i;
 
 /** @type {WeakMap<HTMLElement, {
  *   messageId: string,
@@ -14,10 +14,25 @@ const DEFAULT_SERVER_BASE_URL = "http://localhost:3000";
  *   sent: boolean
  * }>} */
 const composeState = new WeakMap();
+const bridgedOpenUrls = new Set();
 
 function generateMessageId() {
   const rand = Math.random().toString(16).slice(2, 8);
   return `pv_${Date.now()}_${rand}`;
+}
+
+function sendExtensionMessage(message) {
+  return new Promise((resolve, reject) => {
+    chrome.runtime.sendMessage(message, (response) => {
+      const err = chrome.runtime.lastError;
+      if (err) {
+        reject(new Error(err.message));
+        return;
+      }
+
+      resolve(response);
+    });
+  });
 }
 
 function findComposeRoots() {
@@ -44,15 +59,27 @@ function collectLinks(body) {
 
 function injectPixel(body, openUrl) {
   const existing = body.querySelector('img[data-proofview="pixel"]');
-  if (existing) return;
+  if (existing) {
+    existing.src = openUrl;
+    return;
+  }
 
   const img = document.createElement("img");
   img.setAttribute("data-proofview", "pixel");
-  img.alt = "";
+  img.alt = "ProofView tracking pixel";
+  img.title = "ProofView tracking pixel";
   img.src = openUrl;
-  img.width = 1;
-  img.height = 1;
-  img.style.cssText = "width:1px;height:1px;display:none;";
+  img.width = 12;
+  img.height = 12;
+  img.style.cssText = [
+    "width:12px",
+    "height:12px",
+    "display:inline-block",
+    "vertical-align:middle",
+    "margin-left:6px",
+    "border:1px solid #111",
+    "border-radius:2px"
+  ].join(";");
 
   body.appendChild(img);
 }
@@ -111,36 +138,62 @@ function setButtonState(btn, tracked, extra = "") {
   }
 }
 
-async function mintBatch(baseUrl, payload) {
-  const url = new URL("/api/mint-batch", baseUrl).toString();
-
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
+async function mintBatch(payload) {
+  const response = await sendExtensionMessage({
+    type: "proofview:mint-batch",
+    payload
   });
 
-  if (!res.ok) {
-    throw new Error(`Mint failed: HTTP ${res.status}`);
+  if (!response?.ok) {
+    throw new Error(response?.error || "Mint failed");
   }
 
-  return res.json();
+  return response.data;
 }
 
-async function markSent(baseUrl, messageId) {
-  const url = new URL("/api/mark-sent", baseUrl).toString();
-
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ messageId })
+async function markSent(messageId) {
+  const response = await sendExtensionMessage({
+    type: "proofview:mark-sent",
+    messageId
   });
 
-  if (!res.ok) {
-    throw new Error(`Mark sent failed: HTTP ${res.status}`);
+  if (!response?.ok) {
+    throw new Error(response?.error || "Mark sent failed");
   }
 
-  return res.json();
+  return response.data;
+}
+
+function getOpenUrlFromImage(img) {
+  const candidates = [
+    img.getAttribute("data-canonical-src") || "",
+    img.getAttribute("src") || ""
+  ];
+
+  return candidates.find((value) => LOCAL_OPEN_URL_RE.test(value)) || "";
+}
+
+function bridgeVisibleTrackedOpens() {
+  const images = Array.from(
+    document.querySelectorAll('img[data-canonical-src], img[src*="/t/o/"]')
+  );
+
+  for (const img of images) {
+    if (img.getAttribute("data-proofview") === "pixel") continue;
+    if (img.closest('div[role="dialog"]')) continue;
+
+    const openUrl = getOpenUrlFromImage(img);
+    if (!openUrl || bridgedOpenUrls.has(openUrl)) continue;
+
+    bridgedOpenUrls.add(openUrl);
+
+    fetch(openUrl, { cache: "no-store" })
+      .then(() => sendExtensionMessage({ type: "proofview:poll-now" }))
+      .catch((err) => {
+        console.debug("ProofView local-open bridge skipped:", err);
+        bridgedOpenUrls.delete(openUrl);
+      });
+  }
 }
 
 function findSendButton(root) {
@@ -167,7 +220,7 @@ function attachSendInterceptor(root, trackBtn) {
       if (!state?.tracked || state.sent) return;
 
       try {
-        await markSent(DEFAULT_SERVER_BASE_URL, state.messageId);
+        await markSent(state.messageId);
 
         state.sent = true;
         composeState.set(root, state);
@@ -220,7 +273,7 @@ function ensureComposeIntegration(root) {
 
       const links = collectLinks(bodyEl);
 
-      const minted = await mintBatch(DEFAULT_SERVER_BASE_URL, {
+      const minted = await mintBatch({
         messageId: state.messageId,
         links
       });
@@ -245,6 +298,8 @@ function ensureComposeIntegration(root) {
 function scan() {
   const roots = findComposeRoots();
   for (const r of roots) ensureComposeIntegration(r);
+
+  bridgeVisibleTrackedOpens();
 }
 
 function startObserver() {

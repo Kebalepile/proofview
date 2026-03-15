@@ -1,5 +1,5 @@
 const DEFAULT_SERVER_BASE_URL = "http://localhost:3000";
-const DEFAULT_POLLING_SECONDS = 15;
+const DEFAULT_POLLING_MINUTES = 0.5;
 const ALARM_NAME = "proofview-poll";
 
 let statusMap = {};
@@ -19,87 +19,110 @@ function saveState() {
   chrome.storage.local.set({ statusMap, notifiedOpens });
 }
 
+function normalizeBaseUrl(baseUrl) {
+  return typeof baseUrl === "string" && baseUrl.trim()
+    ? baseUrl.trim().replace(/\/+$/, "")
+    : "";
+}
+
 function getServerBaseUrl() {
   return new Promise((resolve) => {
     chrome.storage.local.get(["serverBaseUrl"], (data) => {
-      const baseUrl =
-        typeof data.serverBaseUrl === "string" && data.serverBaseUrl.trim()
-          ? data.serverBaseUrl.trim().replace(/\/+$/, "")
-          : DEFAULT_SERVER_BASE_URL;
-      resolve(baseUrl);
+      resolve(normalizeBaseUrl(data.serverBaseUrl) || DEFAULT_SERVER_BASE_URL);
     });
   });
 }
 
+function setStatus(messageId, status) {
+  if (typeof messageId !== "string" || !messageId) return;
+  if (typeof status !== "string" || !status) return;
+
+  if (statusMap[messageId] === "opened" && status !== "opened") {
+    return;
+  }
+
+  statusMap[messageId] = status;
+}
+
+function respondError(sendResponse, err) {
+  sendResponse({
+    ok: false,
+    error: err instanceof Error ? err.message : String(err)
+  });
+}
+
+function respondAsync(sendResponse, work) {
+  (async () => {
+    try {
+      sendResponse(await work());
+    } catch (err) {
+      respondError(sendResponse, err);
+    }
+  })();
+
+  return true;
+}
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type === "proofview:mint-batch") {
-    (async () => {
-      try {
-        const baseUrl =
-          typeof message.baseUrl === "string" && message.baseUrl.trim()
-            ? message.baseUrl.trim().replace(/\/+$/, "")
-            : await getServerBaseUrl();
+    return respondAsync(sendResponse, async () => {
+      const baseUrl = normalizeBaseUrl(message.baseUrl) || await getServerBaseUrl();
+      const url = new URL("/api/mint-batch", baseUrl).toString();
 
-        const url = new URL("/api/mint-batch", baseUrl).toString();
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(message.payload || {})
+      });
 
-        const res = await fetch(url, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(message.payload || {})
-        });
-
-        if (!res.ok) {
-          sendResponse({ ok: false, error: `Mint failed: HTTP ${res.status}` });
-          return;
-        }
-
-        const data = await res.json();
-        sendResponse({ ok: true, data });
-      } catch (err) {
-        sendResponse({
-          ok: false,
-          error: err instanceof Error ? err.message : String(err)
-        });
+      if (!res.ok) {
+        return { ok: false, error: `Mint failed: HTTP ${res.status}` };
       }
-    })();
-    return true;
+
+      const data = await res.json();
+      if (typeof data?.messageId === "string") {
+        setStatus(data.messageId, "tracked");
+        saveState();
+      }
+
+      return { ok: true, data };
+    });
   }
 
   if (message?.type === "proofview:mark-sent") {
-    (async () => {
-      try {
-        const baseUrl = await getServerBaseUrl();
-        const url = new URL("/api/mark-sent", baseUrl).toString();
+    return respondAsync(sendResponse, async () => {
+      const baseUrl = normalizeBaseUrl(message.baseUrl) || await getServerBaseUrl();
+      const url = new URL("/api/mark-sent", baseUrl).toString();
 
-        const res = await fetch(url, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ messageId: message.messageId })
-        });
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messageId: message.messageId })
+      });
 
-        if (!res.ok) {
-          sendResponse({ ok: false, error: `Mark-sent failed: HTTP ${res.status}` });
-          return;
-        }
-
-        const data = await res.json();
-        sendResponse({ ok: true, data });
-      } catch (err) {
-        sendResponse({
-          ok: false,
-          error: err instanceof Error ? err.message : String(err)
-        });
+      if (!res.ok) {
+        return { ok: false, error: `Mark-sent failed: HTTP ${res.status}` };
       }
-    })();
-    return true;
+
+      const data = await res.json();
+      if (typeof data?.messageId === "string") {
+        setStatus(data.messageId, "sent");
+        saveState();
+      }
+
+      return { ok: true, data };
+    });
   }
 
   if (message?.type === "proofview:update-status") {
-    const { messageId, status } = message;
-    if (typeof messageId === "string" && typeof status === "string") {
-      statusMap[messageId] = status;
-      saveState();
-    }
+    setStatus(message.messageId, message.status);
+    saveState();
+    sendResponse({ ok: true });
+    return true;
+  }
+
+  if (message?.type === "proofview:poll-now") {
+    startPolling();
     sendResponse({ ok: true });
     return true;
   }
@@ -115,13 +138,7 @@ async function fetchEvents(baseUrl, since) {
   }
 
   const raw = await res.json();
-  const events = Array.isArray(raw)
-    ? raw
-    : Array.isArray(raw?.events)
-      ? raw.events
-      : [];
-
-  return events;
+  return Array.isArray(raw?.events) ? raw.events : Array.isArray(raw) ? raw : [];
 }
 
 async function startPolling() {
@@ -135,7 +152,6 @@ async function startPolling() {
       try {
         const since = typeof data.lastSince === "number" ? data.lastSince : 0;
         const events = await fetchEvents(baseUrl, since);
-
         let maxAt = since;
 
         for (const ev of events) {
@@ -146,7 +162,7 @@ async function startPolling() {
           }
 
           if (ev.type === "open" && typeof ev.messageId === "string") {
-            statusMap[ev.messageId] = "opened";
+            setStatus(ev.messageId, "opened");
 
             if (!notifiedOpens[ev.messageId]) {
               notifiedOpens[ev.messageId] = true;
@@ -174,6 +190,15 @@ async function startPolling() {
   }
 }
 
+function schedulePolling() {
+  chrome.alarms.clear(ALARM_NAME, () => {
+    chrome.alarms.create(ALARM_NAME, {
+      delayInMinutes: DEFAULT_POLLING_MINUTES,
+      periodInMinutes: DEFAULT_POLLING_MINUTES
+    });
+  });
+}
+
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === ALARM_NAME) {
     startPolling();
@@ -181,16 +206,14 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 });
 
 chrome.runtime.onInstalled.addListener(() => {
-  chrome.alarms.clear(ALARM_NAME, () => {
-    chrome.alarms.create(ALARM_NAME, {
-      periodInMinutes: DEFAULT_POLLING_SECONDS / 60
-    });
-    startPolling();
-  });
-});
-
-chrome.runtime.onStartup.addListener(() => {
+  schedulePolling();
   startPolling();
 });
 
+chrome.runtime.onStartup.addListener(() => {
+  schedulePolling();
+  startPolling();
+});
+
+schedulePolling();
 startPolling();
