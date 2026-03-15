@@ -10,6 +10,7 @@ const FALLBACK_PNG = Buffer.from(
 
 let cachedLogoPath = "";
 let cachedLogoBuffer = null;
+let cachedLogoStamp = 0;
 
 function getOpenImageBuffer(logoFile) {
   const nextPath = typeof logoFile === "string" ? logoFile.trim() : "";
@@ -17,15 +18,19 @@ function getOpenImageBuffer(logoFile) {
     return FALLBACK_PNG;
   }
 
-  if (cachedLogoBuffer && cachedLogoPath === nextPath) {
-    return cachedLogoBuffer;
-  }
-
   try {
+    const stat = fs.statSync(nextPath);
+    const stamp = Number(stat.mtimeMs || 0);
+
+    if (cachedLogoBuffer && cachedLogoPath === nextPath && cachedLogoStamp === stamp) {
+      return cachedLogoBuffer;
+    }
+
     const buffer = fs.readFileSync(nextPath);
     if (buffer.length > 0) {
       cachedLogoPath = nextPath;
       cachedLogoBuffer = buffer;
+      cachedLogoStamp = stamp;
       return buffer;
     }
   } catch (err) {

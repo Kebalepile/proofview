@@ -9,8 +9,8 @@
   z-index: 999999;
   display: inline-flex;
   align-items: stretch;
-  width: min(280px, calc(100% - 24px));
-  max-width: calc(100% - 24px);
+  
+  max-width:200px;
   gap: 0;
   padding: 0;
   border: 1px solid rgba(15, 23, 42, 0.08);
@@ -88,7 +88,13 @@
   transform: translateY(0);
 }
 
-.proofview-track-btn[data-proofview-state="tracked"],
+.proofview-track-btn[data-proofview-state="tracked"] {
+  border-color: #ffffff;
+  background: #ffffff;
+  color: #3c4043;
+  box-shadow: none;
+}
+
 .proofview-track-btn[data-proofview-state="sent"] {
   border-color: #ffffff;
   background: linear-gradient(180deg, #374151 0%, #1f2937 100%);
