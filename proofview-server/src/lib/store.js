@@ -1,7 +1,8 @@
 const fs = require("fs");
 const path = require("path");
+const { getConfig } = require("./config");
 
-const STORAGE_FILE = path.join(__dirname, "..", "..", "data.json");
+const { storageFile: STORAGE_FILE } = getConfig();
 
 let db = {
   events: [],
@@ -16,6 +17,17 @@ function ensureDir(filePath) {
   }
 }
 
+function normalizeCounter(counter) {
+  return {
+    opens: Number(counter?.opens || 0),
+    lastOpenAt: counter?.lastOpenAt ?? null,
+    clicks: Number(counter?.clicks || 0),
+    lastClickAt: counter?.lastClickAt ?? null,
+    downloads: Number(counter?.downloads || 0),
+    lastDownloadAt: counter?.lastDownloadAt ?? null
+  };
+}
+
 function load() {
   try {
     ensureDir(STORAGE_FILE);
@@ -23,10 +35,17 @@ function load() {
     if (fs.existsSync(STORAGE_FILE)) {
       const raw = fs.readFileSync(STORAGE_FILE, "utf8");
       const parsed = JSON.parse(raw);
+      const counters = parsed.counters && typeof parsed.counters === "object"
+        ? parsed.counters
+        : {};
 
       db = {
         events: Array.isArray(parsed.events) ? parsed.events : [],
-        counters: parsed.counters && typeof parsed.counters === "object" ? parsed.counters : {},
+        counters: Object.fromEntries(
+          Object.entries(counters).map(([messageId, counter]) => {
+            return [messageId, normalizeCounter(counter)];
+          })
+        ),
         sent: parsed.sent && typeof parsed.sent === "object" ? parsed.sent : {}
       };
     } else {
@@ -49,11 +68,9 @@ function persist() {
 
 function ensureCounters(messageId) {
   if (!db.counters[messageId]) {
-    db.counters[messageId] = {
-      opens: 0,
-      lastOpenAt: null
-    };
+    db.counters[messageId] = normalizeCounter();
   }
+
   return db.counters[messageId];
 }
 
@@ -61,6 +78,24 @@ function bumpOpen(messageId, at) {
   const c = ensureCounters(messageId);
   c.opens += 1;
   c.lastOpenAt = at;
+  persist();
+  return c;
+}
+
+function bump(messageId, type, at) {
+  const c = ensureCounters(messageId);
+
+  if (type === "click") {
+    c.clicks += 1;
+    c.lastClickAt = at;
+  } else if (type === "download") {
+    c.downloads += 1;
+    c.lastDownloadAt = at;
+  } else if (type === "open") {
+    c.opens += 1;
+    c.lastOpenAt = at;
+  }
+
   persist();
   return c;
 }
@@ -78,7 +113,7 @@ function getEventsSince(since) {
 }
 
 function getStatus(messageId) {
-  return db.counters[messageId] || { opens: 0, lastOpenAt: null };
+  return db.counters[messageId] || normalizeCounter();
 }
 
 function markSent(messageId, at) {
@@ -97,6 +132,7 @@ function isSent(messageId) {
 load();
 
 module.exports = {
+  bump,
   bumpOpen,
   appendEvent,
   getEventsSince,

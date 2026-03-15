@@ -7,8 +7,6 @@ const PIXEL_PNG = Buffer.from(
   "base64"
 );
 
-const OPEN_GRACE_MS = 15000;
-
 function trackOpen(req, res, deps) {
   const v = verifyToken(deps.token, deps.secret);
   if (!v.ok) {
@@ -17,6 +15,9 @@ function trackOpen(req, res, deps) {
 
   const at = Date.now();
   const { messageId } = v.payload;
+  const openGraceMs = Number.isFinite(Number(deps.openGraceMs))
+    ? Number(deps.openGraceMs)
+    : 15000;
 
   // Ignore any opens before message is explicitly marked sent
   if (!store.isSent(messageId)) {
@@ -26,7 +27,7 @@ function trackOpen(req, res, deps) {
   const sentAt = store.getSentAt(messageId);
 
   // Ignore opens too soon after send
-  if (typeof sentAt === "number" && at - sentAt < OPEN_GRACE_MS) {
+  if (typeof sentAt === "number" && at - sentAt < openGraceMs) {
     return sendPng(res, PIXEL_PNG);
   }
 

@@ -5,17 +5,15 @@
 
 const http = require("http");
 const { router } = require("./router");
+const { getConfig } = require("./lib/config");
 
-const PORT = 3000;
-const SECRET = "proofview-dev-secret-change-me";
+const config = getConfig();
 
 const server = http.createServer((req, res) => {
-  router(req, res, {
-    port: PORT,
-    secret: SECRET
-  });
+  router(req, res, config);
 });
 
-server.listen(PORT, () => {
-  console.log(`ProofView server listening on http://localhost:${PORT}`);
+server.listen(config.port, () => {
+  console.log(`ProofView server listening on port ${config.port}`);
+  console.log(`ProofView public base URL: ${config.publicBaseUrl}`);
 });

@@ -2,10 +2,13 @@ const { sendText } = require("./lib/http");
 const { apiMintBatch } = require("./handlers/apiMintBatch");
 const { apiEvents } = require("./handlers/apiEvents");
 const { apiMarkSent } = require("./handlers/apiMarkSent");
+const { apiStatus } = require("./handlers/apiStatus");
 const { trackOpen } = require("./handlers/trackOpen");
+const { trackLink } = require("./handlers/trackLink");
+const { trackDoc } = require("./handlers/trackDoc");
 
 function router(req, res, deps) {
-  const urlObj = new URL(req.url, `http://localhost:${deps.port}`);
+  const urlObj = new URL(req.url, deps.publicBaseUrl);
 
   if (req.method === "OPTIONS") {
     res.writeHead(204, {
@@ -33,9 +36,28 @@ function router(req, res, deps) {
     return apiEvents(res, urlObj);
   }
 
+  if (req.method === "GET" && urlObj.pathname === "/api/status") {
+    const messageId = urlObj.searchParams.get("messageId") || "";
+    if (!messageId) {
+      return sendText(res, 400, "messageId is required");
+    }
+
+    return apiStatus(res, messageId);
+  }
+
   if (req.method === "GET" && /^\/t\/o\/.+\.png$/.test(urlObj.pathname)) {
     const token = urlObj.pathname.replace(/^\/t\/o\//, "").replace(/\.png$/, "");
     return trackOpen(req, res, { ...deps, token });
+  }
+
+  if (req.method === "GET" && /^\/t\/l\/.+$/.test(urlObj.pathname)) {
+    const token = urlObj.pathname.replace(/^\/t\/l\//, "");
+    return trackLink(req, res, { ...deps, token });
+  }
+
+  if (req.method === "GET" && /^\/t\/d\/.+$/.test(urlObj.pathname)) {
+    const token = urlObj.pathname.replace(/^\/t\/d\//, "");
+    return trackDoc(req, res, { ...deps, token });
   }
 
   return sendText(res, 404, "Not found");

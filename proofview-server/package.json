@@ -4,6 +4,8 @@
   "private": true,
   "type": "commonjs",
   "scripts": {
+    "prestart": "node scripts/sync-extension-config.js",
+    "sync-extension": "node scripts/sync-extension-config.js",
     "start": "node src/server.js"
   }
 }

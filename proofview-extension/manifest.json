@@ -9,8 +9,7 @@
     "notifications"
   ],
   "host_permissions": [
-    "http://localhost:3000/*",
-    "http://127.0.0.1:3000/*",
+    "https://proofview.onrender.com/*",
     "https://mail.google.com/*"
   ],
   "background": {
@@ -26,6 +25,7 @@
         "https://mail.google.com/*"
       ],
       "js": [
+        "config.js",
         "gmail_content.js"
       ],
       "run_at": "document_idle"

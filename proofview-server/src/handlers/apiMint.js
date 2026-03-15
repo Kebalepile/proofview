@@ -22,6 +22,7 @@ function apiMint(res, urlObj, deps) {
   const mode = urlObj.searchParams.get("mode") || "pixel";
   const url = urlObj.searchParams.get("url") || "https://example.com";
   const file = urlObj.searchParams.get("file") || "sample.pdf";
+  const baseUrl = deps.publicBaseUrl;
 
   const now = Date.now();
   const exp = now + 30 * 24 * 60 * 60 * 1000; // expire in 30 days
@@ -33,9 +34,9 @@ function apiMint(res, urlObj, deps) {
   sendJson(res, 200, {
     messageId,
     recipientId,
-    openUrl: `http://localhost:${deps.port}/t/o/${openToken}.png`,
-    linkUrl: `http://localhost:${deps.port}/t/l/${linkToken}`,
-    docUrl:  `http://localhost:${deps.port}/t/d/${docToken}`
+    openUrl: `${baseUrl}/t/o/${openToken}.png`,
+    linkUrl: `${baseUrl}/t/l/${linkToken}`,
+    docUrl: `${baseUrl}/t/d/${docToken}`
   });
 }
 

@@ -26,6 +26,7 @@ async function apiMintBatch(req, res, deps) {
     const links = Array.isArray(body.links) ? body.links : [];
     const now = Date.now();
     const exp = now + 30 * 24 * 60 * 60 * 1000;
+    const baseUrl = deps.publicBaseUrl;
 
     const openToken = signToken(
       { messageId, iat: now, exp },
@@ -38,13 +39,12 @@ async function apiMintBatch(req, res, deps) {
         { messageId, url: originalUrl, iat: now, exp },
         deps.secret
       );
-      linkMap[originalUrl] = `http://localhost:${deps.port}/t/o/${openToken}.png?redirect=${encodeURIComponent(originalUrl)}`;
-      linkMap[originalUrl] = `http://localhost:${deps.port}/t/l/${linkToken}`;
+      linkMap[originalUrl] = `${baseUrl}/t/l/${linkToken}`;
     }
 
     sendJson(res, 200, {
       messageId,
-      openUrl: `http://localhost:${deps.port}/t/o/${openToken}.png`,
+      openUrl: `${baseUrl}/t/o/${openToken}.png`,
       linkMap
     });
   } catch (err) {

@@ -2,11 +2,9 @@
  * ProofView Gmail integration (Vanilla JS).
  *
  * Compose actions go through the extension service worker so tracked/sent
- * status stays consistent, and local Gmail message views can bridge opens
- * back to a localhost server for development testing.
+ * status stays consistent, and local Gmail message views can optionally
+ * bridge opens back to a locally configured server during development.
  */
-
-const LOCAL_OPEN_URL_RE = /^https?:\/\/(?:localhost|127\.0\.0\.1):\d+\/t\/o\/.+\.png(?:\?.*)?$/i;
 
 /** @type {WeakMap<HTMLElement, {
  *   messageId: string,
@@ -15,10 +13,39 @@ const LOCAL_OPEN_URL_RE = /^https?:\/\/(?:localhost|127\.0\.0\.1):\d+\/t\/o\/.+\
  * }>} */
 const composeState = new WeakMap();
 const bridgedOpenUrls = new Set();
+const LOCAL_OPEN_URL_RE = buildLocalOpenUrlPattern(
+  globalThis.PROOFVIEW_EXTENSION_CONFIG?.serverBaseUrl || ""
+);
 
 function generateMessageId() {
   const rand = Math.random().toString(16).slice(2, 8);
   return `pv_${Date.now()}_${rand}`;
+}
+
+function normalizeBaseUrl(baseUrl) {
+  return typeof baseUrl === "string" && baseUrl.trim()
+    ? baseUrl.trim().replace(/\/+$/, "")
+    : "";
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function buildLocalOpenUrlPattern(baseUrl) {
+  try {
+    const normalized = normalizeBaseUrl(baseUrl);
+    if (!normalized) return null;
+
+    const parsed = new URL(normalized);
+    if (!["localhost", "127.0.0.1"].includes(parsed.hostname)) {
+      return null;
+    }
+
+    return new RegExp(`^${escapeRegExp(normalized)}\\/t\\/o\\/.+\\.png(?:\\?.*)?$`, "i");
+  } catch {
+    return null;
+  }
 }
 
 function sendExtensionMessage(message) {
@@ -170,7 +197,7 @@ function getOpenUrlFromImage(img) {
     img.getAttribute("src") || ""
   ];
 
-  return candidates.find((value) => LOCAL_OPEN_URL_RE.test(value)) || "";
+  return candidates.find((value) => LOCAL_OPEN_URL_RE?.test(value)) || "";
 }
 
 function bridgeVisibleTrackedOpens() {

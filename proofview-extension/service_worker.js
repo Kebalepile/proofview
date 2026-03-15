@@ -1,4 +1,11 @@
-const DEFAULT_SERVER_BASE_URL = "http://localhost:3000";
+try {
+  importScripts("config.js");
+} catch (err) {
+  console.warn("ProofView config.js could not be loaded.", err);
+}
+
+const DEFAULT_SERVER_BASE_URL =
+  normalizeBaseUrl(globalThis.PROOFVIEW_EXTENSION_CONFIG?.serverBaseUrl);
 const DEFAULT_POLLING_MINUTES = 0.5;
 const ALARM_NAME = "proofview-poll";
 
@@ -63,10 +70,20 @@ function respondAsync(sendResponse, work) {
   return true;
 }
 
+function ensureServerBaseUrl(baseUrl) {
+  if (!baseUrl) {
+    throw new Error("ProofView serverBaseUrl is not configured. Run the extension sync step first.");
+  }
+
+  return baseUrl;
+}
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type === "proofview:mint-batch") {
     return respondAsync(sendResponse, async () => {
-      const baseUrl = normalizeBaseUrl(message.baseUrl) || await getServerBaseUrl();
+      const baseUrl = ensureServerBaseUrl(
+        normalizeBaseUrl(message.baseUrl) || await getServerBaseUrl()
+      );
       const url = new URL("/api/mint-batch", baseUrl).toString();
 
       const res = await fetch(url, {
@@ -91,7 +108,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message?.type === "proofview:mark-sent") {
     return respondAsync(sendResponse, async () => {
-      const baseUrl = normalizeBaseUrl(message.baseUrl) || await getServerBaseUrl();
+      const baseUrl = ensureServerBaseUrl(
+        normalizeBaseUrl(message.baseUrl) || await getServerBaseUrl()
+      );
       const url = new URL("/api/mark-sent", baseUrl).toString();
 
       const res = await fetch(url, {
@@ -146,7 +165,7 @@ async function startPolling() {
   isPolling = true;
 
   try {
-    const baseUrl = await getServerBaseUrl();
+    const baseUrl = ensureServerBaseUrl(await getServerBaseUrl());
 
     chrome.storage.local.get(["lastSince"], async (data) => {
       try {
