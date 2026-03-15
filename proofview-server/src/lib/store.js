@@ -129,6 +129,22 @@ function isSent(messageId) {
   return typeof db.sent[messageId] === "number";
 }
 
+function deleteMessage(messageId) {
+  db.events = db.events.filter((event) => event?.messageId !== messageId);
+  delete db.counters[messageId];
+  delete db.sent[messageId];
+  persist();
+}
+
+function clearAll() {
+  db = {
+    events: [],
+    counters: {},
+    sent: {}
+  };
+  persist();
+}
+
 load();
 
 module.exports = {
@@ -139,5 +155,7 @@ module.exports = {
   getStatus,
   markSent,
   getSentAt,
-  isSent
+  isSent,
+  deleteMessage,
+  clearAll
 };

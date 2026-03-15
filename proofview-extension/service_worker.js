@@ -4,6 +4,12 @@ try {
   console.warn("ProofView config.js could not be loaded.", err);
 }
 
+function normalizeBaseUrl(baseUrl) {
+  return typeof baseUrl === "string" && baseUrl.trim()
+    ? baseUrl.trim().replace(/\/+$/, "")
+    : "";
+}
+
 const DEFAULT_SERVER_BASE_URL =
   normalizeBaseUrl(globalThis.PROOFVIEW_EXTENSION_CONFIG?.serverBaseUrl);
 const DEFAULT_POLLING_MINUTES = 0.5;
@@ -11,25 +17,97 @@ const ALARM_NAME = "proofview-poll";
 
 let statusMap = {};
 let notifiedOpens = {};
+let messageMeta = {};
 let isPolling = false;
 
-chrome.storage.local.get(["statusMap", "notifiedOpens"], (data) => {
+chrome.storage.local.get(["statusMap", "notifiedOpens", "messageMeta"], (data) => {
   if (data.statusMap && typeof data.statusMap === "object") {
     statusMap = data.statusMap;
   }
+
   if (data.notifiedOpens && typeof data.notifiedOpens === "object") {
     notifiedOpens = data.notifiedOpens;
   }
+
+  if (data.messageMeta && typeof data.messageMeta === "object") {
+    messageMeta = Object.fromEntries(
+      Object.entries(data.messageMeta).map(([messageId, entry]) => {
+        return [messageId, normalizeMessageMeta(entry)];
+      })
+    );
+  }
 });
 
-function saveState() {
-  chrome.storage.local.set({ statusMap, notifiedOpens });
+function normalizeMessageMeta(entry) {
+  const openEvents = Array.isArray(entry?.openEvents)
+    ? entry.openEvents.filter((value) => typeof value === "number").sort((a, b) => b - a)
+    : [];
+
+  return {
+    subject:
+      typeof entry?.subject === "string" && entry.subject.trim()
+        ? entry.subject.trim()
+        : "No subject",
+    trackedAt: typeof entry?.trackedAt === "number" ? entry.trackedAt : null,
+    sentAt: typeof entry?.sentAt === "number" ? entry.sentAt : null,
+    openEvents
+  };
 }
 
-function normalizeBaseUrl(baseUrl) {
-  return typeof baseUrl === "string" && baseUrl.trim()
-    ? baseUrl.trim().replace(/\/+$/, "")
-    : "";
+function ensureMessageMeta(messageId) {
+  if (!messageMeta[messageId] || typeof messageMeta[messageId] !== "object") {
+    messageMeta[messageId] = normalizeMessageMeta({});
+  } else {
+    messageMeta[messageId] = normalizeMessageMeta(messageMeta[messageId]);
+  }
+
+  return messageMeta[messageId];
+}
+
+function updateMessageMeta(messageId, patch = {}) {
+  const meta = ensureMessageMeta(messageId);
+
+  if (typeof patch.subject === "string" && patch.subject.trim()) {
+    meta.subject = patch.subject.trim();
+  }
+
+  if (typeof patch.trackedAt === "number") {
+    meta.trackedAt = patch.trackedAt;
+  }
+
+  if (typeof patch.sentAt === "number") {
+    meta.sentAt = patch.sentAt;
+  }
+
+  return meta;
+}
+
+function recordOpenEvent(messageId, at) {
+  const meta = ensureMessageMeta(messageId);
+  if (typeof at !== "number") return meta;
+
+  if (!meta.openEvents.includes(at)) {
+    meta.openEvents.push(at);
+    meta.openEvents.sort((a, b) => b - a);
+  }
+
+  return meta;
+}
+
+function saveState() {
+  chrome.storage.local.set({ statusMap, notifiedOpens, messageMeta });
+}
+
+function deleteLocalMessage(messageId) {
+  delete statusMap[messageId];
+  delete notifiedOpens[messageId];
+  delete messageMeta[messageId];
+}
+
+function clearLocalMessages() {
+  statusMap = {};
+  notifiedOpens = {};
+  messageMeta = {};
 }
 
 function getServerBaseUrl() {
@@ -78,27 +156,35 @@ function ensureServerBaseUrl(baseUrl) {
   return baseUrl;
 }
 
+async function postJson(baseUrl, pathname, body) {
+  const url = new URL(pathname, baseUrl).toString();
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: body === undefined ? undefined : JSON.stringify(body)
+  });
+
+  if (!res.ok) {
+    throw new Error(`${pathname} failed: HTTP ${res.status}`);
+  }
+
+  return res.json();
+}
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type === "proofview:mint-batch") {
     return respondAsync(sendResponse, async () => {
       const baseUrl = ensureServerBaseUrl(
         normalizeBaseUrl(message.baseUrl) || await getServerBaseUrl()
       );
-      const url = new URL("/api/mint-batch", baseUrl).toString();
+      const data = await postJson(baseUrl, "/api/mint-batch", message.payload || {});
 
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(message.payload || {})
-      });
-
-      if (!res.ok) {
-        return { ok: false, error: `Mint failed: HTTP ${res.status}` };
-      }
-
-      const data = await res.json();
       if (typeof data?.messageId === "string") {
         setStatus(data.messageId, "tracked");
+        updateMessageMeta(data.messageId, {
+          subject: message?.payload?.subject,
+          trackedAt: Date.now()
+        });
         saveState();
       }
 
@@ -111,21 +197,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       const baseUrl = ensureServerBaseUrl(
         normalizeBaseUrl(message.baseUrl) || await getServerBaseUrl()
       );
-      const url = new URL("/api/mark-sent", baseUrl).toString();
-
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messageId: message.messageId })
+      const data = await postJson(baseUrl, "/api/mark-sent", {
+        messageId: message.messageId
       });
 
-      if (!res.ok) {
-        return { ok: false, error: `Mark-sent failed: HTTP ${res.status}` };
-      }
-
-      const data = await res.json();
       if (typeof data?.messageId === "string") {
         setStatus(data.messageId, "sent");
+        updateMessageMeta(data.messageId, {
+          subject: message.subject,
+          sentAt: typeof data.sentAt === "number" ? data.sentAt : Date.now()
+        });
         saveState();
       }
 
@@ -133,8 +214,41 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     });
   }
 
+  if (message?.type === "proofview:delete-message") {
+    return respondAsync(sendResponse, async () => {
+      const baseUrl = ensureServerBaseUrl(await getServerBaseUrl());
+      const messageId = typeof message.messageId === "string" ? message.messageId : "";
+
+      if (!messageId) {
+        throw new Error("messageId is required");
+      }
+
+      await postJson(baseUrl, "/api/delete-message", { messageId });
+      deleteLocalMessage(messageId);
+      saveState();
+
+      return { ok: true };
+    });
+  }
+
+  if (message?.type === "proofview:delete-all") {
+    return respondAsync(sendResponse, async () => {
+      const baseUrl = ensureServerBaseUrl(await getServerBaseUrl());
+
+      await postJson(baseUrl, "/api/delete-all", {});
+      clearLocalMessages();
+      chrome.storage.local.remove(["lastSince"]);
+      saveState();
+
+      return { ok: true };
+    });
+  }
+
   if (message?.type === "proofview:update-status") {
     setStatus(message.messageId, message.status);
+    updateMessageMeta(message.messageId, {
+      subject: message.subject
+    });
     saveState();
     sendResponse({ ok: true });
     return true;
@@ -182,14 +296,16 @@ async function startPolling() {
 
           if (ev.type === "open" && typeof ev.messageId === "string") {
             setStatus(ev.messageId, "opened");
+            recordOpenEvent(ev.messageId, ev.at);
 
             if (!notifiedOpens[ev.messageId]) {
               notifiedOpens[ev.messageId] = true;
+              const meta = ensureMessageMeta(ev.messageId);
               chrome.notifications.create({
                 type: "basic",
                 iconUrl: "icons/icon48.png",
                 title: "Email opened",
-                message: `Email ${ev.messageId} was opened`
+                message: `${meta.subject} was opened`
               });
             }
           }

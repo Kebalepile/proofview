@@ -84,6 +84,21 @@ function collectLinks(body) {
   return Array.from(new Set(urls));
 }
 
+function findSubjectInput(root) {
+  return (
+    root.querySelector('input[name="subjectbox"]') ||
+    root.querySelector('input[placeholder="Subject"]') ||
+    root.querySelector('input[aria-label*="Subject"]') ||
+    null
+  );
+}
+
+function getDraftSubject(root) {
+  const input = findSubjectInput(root);
+  const value = input && typeof input.value === "string" ? input.value.trim() : "";
+  return value || "No subject";
+}
+
 function injectPixel(body, openUrl) {
   const existing = body.querySelector('img[data-proofview="pixel"]');
   if (existing) {
@@ -178,10 +193,11 @@ async function mintBatch(payload) {
   return response.data;
 }
 
-async function markSent(messageId) {
+async function markSent(messageId, subject) {
   const response = await sendExtensionMessage({
     type: "proofview:mark-sent",
-    messageId
+    messageId,
+    subject
   });
 
   if (!response?.ok) {
@@ -247,7 +263,7 @@ function attachSendInterceptor(root, trackBtn) {
       if (!state?.tracked || state.sent) return;
 
       try {
-        await markSent(state.messageId);
+        await markSent(state.messageId, getDraftSubject(root));
 
         state.sent = true;
         composeState.set(root, state);
@@ -302,7 +318,8 @@ function ensureComposeIntegration(root) {
 
       const minted = await mintBatch({
         messageId: state.messageId,
-        links
+        links,
+        subject: getDraftSubject(root)
       });
 
       injectPixel(bodyEl, minted.openUrl);

@@ -2,6 +2,8 @@ const { sendText } = require("./lib/http");
 const { apiMintBatch } = require("./handlers/apiMintBatch");
 const { apiEvents } = require("./handlers/apiEvents");
 const { apiMarkSent } = require("./handlers/apiMarkSent");
+const { apiDeleteMessage } = require("./handlers/apiDeleteMessage");
+const { apiDeleteAll } = require("./handlers/apiDeleteAll");
 const { apiStatus } = require("./handlers/apiStatus");
 const { trackOpen } = require("./handlers/trackOpen");
 const { trackLink } = require("./handlers/trackLink");
@@ -13,7 +15,7 @@ function router(req, res, deps) {
   if (req.method === "OPTIONS") {
     res.writeHead(204, {
       "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+      "Access-Control-Allow-Methods": "GET,POST,DELETE,OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type"
     });
     res.end();
@@ -30,6 +32,14 @@ function router(req, res, deps) {
 
   if (req.method === "POST" && urlObj.pathname === "/api/mark-sent") {
     return apiMarkSent(req, res);
+  }
+
+  if (req.method === "POST" && urlObj.pathname === "/api/delete-message") {
+    return apiDeleteMessage(req, res);
+  }
+
+  if (req.method === "POST" && urlObj.pathname === "/api/delete-all") {
+    return apiDeleteAll(res);
   }
 
   if (req.method === "GET" && urlObj.pathname === "/api/events") {
