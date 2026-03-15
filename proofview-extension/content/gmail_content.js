@@ -36,6 +36,12 @@ function normalizeBaseUrl(baseUrl) {
     : "";
 }
 
+function getMascotLogoUrl() {
+  return PROOFVIEW_SERVER_BASE_URL
+    ? `${PROOFVIEW_SERVER_BASE_URL}/brand/mascot.png`
+    : "";
+}
+
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -118,6 +124,18 @@ function decodeTrackedLinkTarget(rawUrl) {
   const payloadB64 = token.split(".")[0] || "";
   const payload = decodeBase64UrlJson(payloadB64);
   return typeof payload?.url === "string" ? payload.url : "";
+}
+
+function decodeTrackedMessageId(rawUrl, kind) {
+  const parsed = parseProofViewUrl(rawUrl, kind);
+  if (!parsed) {
+    return "";
+  }
+
+  const token = parsed.pathname.replace(new RegExp(`^/t/${kind}/`), "").replace(/\.png$/i, "");
+  const payloadB64 = token.split(".")[0] || "";
+  const payload = decodeBase64UrlJson(payloadB64);
+  return typeof payload?.messageId === "string" ? payload.messageId : "";
 }
 
 async function deleteTrackedMessage(messageId) {
@@ -357,34 +375,72 @@ function getDraftSubject(root) {
 }
 
 function injectPixel(body, openUrl) {
-  const existing = body.querySelector('img[data-proofview="pixel"]');
-  if (existing) {
-    existing.src = openUrl;
-    existing.alt = "ProofView logo";
-    existing.title = "ProofView logo";
-    existing.width = 38;
-    existing.height = 38;
-    existing.setAttribute(
+  const mascotSrc = getMascotLogoUrl();
+  const visibleLogo = body.querySelector('img[data-proofview="logo"]');
+  const hiddenPixel = body.querySelector('img[data-proofview="pixel"]');
+
+  if (visibleLogo) {
+    visibleLogo.alt = "ProofView logo";
+    visibleLogo.title = "ProofView logo";
+    visibleLogo.className = "proofview-logo-mark";
+    visibleLogo.width = 38;
+    visibleLogo.height = 38;
+    visibleLogo.setAttribute(
       "style",
       "display:block;width:38px;height:38px;margin:12px 0 0 auto;border-radius:10px;object-fit:contain;"
+    );
+
+    if (mascotSrc) {
+      visibleLogo.src = mascotSrc;
+    }
+  } else {
+    if (mascotSrc) {
+      const logo = document.createElement("img");
+      logo.setAttribute("data-proofview", "logo");
+      logo.alt = "ProofView logo";
+      logo.title = "ProofView logo";
+      logo.className = "proofview-logo-mark";
+      logo.width = 38;
+      logo.height = 38;
+      logo.setAttribute(
+        "style",
+        "display:block;width:38px;height:38px;margin:12px 0 0 auto;border-radius:10px;object-fit:contain;"
+      );
+
+      logo.src = mascotSrc;
+
+      body.appendChild(logo);
+    }
+  }
+
+  if (hiddenPixel) {
+    hiddenPixel.src = openUrl;
+    hiddenPixel.alt = "";
+    hiddenPixel.title = "";
+    hiddenPixel.className = "proofview-pixel";
+    hiddenPixel.width = 1;
+    hiddenPixel.height = 1;
+    hiddenPixel.setAttribute(
+      "style",
+      "display:block;width:1px;height:1px;max-width:1px;max-height:1px;opacity:0.01;overflow:hidden;position:absolute;left:-9999px;top:-9999px;pointer-events:none;"
     );
     return;
   }
 
-  const img = document.createElement("img");
-  img.setAttribute("data-proofview", "pixel");
-  img.alt = "ProofView logo";
-  img.title = "ProofView logo";
-  img.className = "proofview-pixel";
-  img.src = openUrl;
-  img.width = 38;
-  img.height = 38;
-  img.setAttribute(
+  const pixel = document.createElement("img");
+  pixel.setAttribute("data-proofview", "pixel");
+  pixel.alt = "";
+  pixel.title = "";
+  pixel.className = "proofview-pixel";
+  pixel.src = openUrl;
+  pixel.width = 1;
+  pixel.height = 1;
+  pixel.setAttribute(
     "style",
-    "display:block;width:38px;height:38px;margin:12px 0 0 auto;border-radius:10px;object-fit:contain;"
+    "display:block;width:1px;height:1px;max-width:1px;max-height:1px;opacity:0.01;overflow:hidden;position:absolute;left:-9999px;top:-9999px;pointer-events:none;"
   );
 
-  body.appendChild(img);
+  body.appendChild(pixel);
 }
 
 function rewriteLinks(body, linkMap) {
@@ -410,6 +466,7 @@ function rewriteLinks(body, linkMap) {
 function removeTrackedImages(body) {
   const trackedImages = Array.from(body.querySelectorAll("img")).filter((img) => {
     return (
+      img.getAttribute("data-proofview") === "logo" ||
       img.getAttribute("data-proofview") === "pixel" ||
       isProofViewOpenUrl(img.getAttribute("src")) ||
       isProofViewOpenUrl(img.getAttribute("data-canonical-src"))
@@ -440,11 +497,116 @@ function restoreTrackedLinks(body) {
 function cleanupStaleTrackedMarkup(root) {
   const body = findMessageBody(root);
   if (!body) {
-    return;
+    return [];
+  }
+
+  const danglingMessageIds = new Set();
+
+  const trackedImages = Array.from(body.querySelectorAll("img"));
+  for (const img of trackedImages) {
+    const candidates = [
+      img.getAttribute("data-canonical-src") || "",
+      img.getAttribute("src") || ""
+    ];
+
+    for (const candidate of candidates) {
+      const messageId = decodeTrackedMessageId(candidate, "o");
+      if (messageId) {
+        danglingMessageIds.add(messageId);
+      }
+    }
+  }
+
+  const anchors = Array.from(body.querySelectorAll("a[href]"));
+  for (const anchor of anchors) {
+    const messageId = decodeTrackedMessageId(anchor.getAttribute("href") || "", "l");
+    if (messageId) {
+      danglingMessageIds.add(messageId);
+    }
   }
 
   removeTrackedImages(body);
   restoreTrackedLinks(body);
+
+  return Array.from(danglingMessageIds);
+}
+
+function detectTrackedComposeState(root) {
+  const body = findMessageBody(root);
+  if (!body) {
+    return null;
+  }
+
+  const trackedImages = Array.from(body.querySelectorAll("img"));
+  for (const img of trackedImages) {
+    const candidates = [
+      img.getAttribute("data-canonical-src") || "",
+      img.getAttribute("src") || ""
+    ];
+
+    for (const candidate of candidates) {
+      const messageId = decodeTrackedMessageId(candidate, "o");
+      if (messageId) {
+        return {
+          messageId,
+          tracked: true,
+          sent: false,
+          sending: false
+        };
+      }
+    }
+  }
+
+  const anchors = Array.from(body.querySelectorAll("a[href]"));
+  for (const anchor of anchors) {
+    const messageId = decodeTrackedMessageId(anchor.getAttribute("href") || "", "l");
+    if (messageId) {
+      return {
+        messageId,
+        tracked: true,
+        sent: false,
+        sending: false
+      };
+    }
+  }
+
+  return null;
+}
+
+function syncComposeControls(root, trackBtn, untrackBtn) {
+  const detectedState = detectTrackedComposeState(root);
+  const state = composeState.get(root);
+
+  if (detectedState) {
+    const nextState = {
+      ...detectedState,
+      sent:
+        detectedState.messageId === state?.messageId
+          ? !!state?.sent
+          : false,
+      sending:
+        detectedState.messageId === state?.messageId
+          ? !!state?.sending
+          : false
+    };
+
+    composeState.set(root, nextState);
+    setComposeActionState(
+      trackBtn,
+      untrackBtn,
+      nextState.sent ? "sent" : "tracked"
+    );
+    return;
+  }
+
+  if (state?.sent) {
+    setComposeActionState(trackBtn, untrackBtn, "sent");
+    return;
+  }
+
+  if (!state?.tracked) {
+    setComposeActionState(trackBtn, untrackBtn, "idle");
+  }
 }
 
 function createComposeControls(root) {
@@ -660,15 +822,7 @@ function attachSendInterceptor(root, trackBtn, untrackBtn) {
 
 function handleRemovedComposeRoot(root) {
   activeComposeRoots.delete(root);
-
-  const state = composeState.get(root);
   composeState.delete(root);
-
-  if (!state?.tracked || state.sent || state.sending) {
-    return;
-  }
-
-  deleteTrackedMessage(state.messageId);
 }
 
 function reconcileComposeRoots(currentRoots) {
@@ -682,19 +836,29 @@ function reconcileComposeRoots(currentRoots) {
 }
 
 function ensureComposeIntegration(root) {
-  if (root.querySelector('[data-proofview="compose-actions"]')) return;
+  const existingTrackBtn = root.querySelector('button[data-proofview="track-btn"]');
+  const existingUntrackBtn = root.querySelector('button[data-proofview="untrack-btn"]');
+  if (existingTrackBtn && existingUntrackBtn) {
+    syncComposeControls(root, existingTrackBtn, existingUntrackBtn);
+    return;
+  }
 
   const body = findMessageBody(root);
   if (!body) return;
 
   if (!composeState.has(root)) {
-    cleanupStaleTrackedMarkup(root);
-    resetComposeTracking(root);
+    const existingTrackedState = detectTrackedComposeState(root);
+    if (existingTrackedState) {
+      composeState.set(root, existingTrackedState);
+    } else {
+      resetComposeTracking(root);
+    }
+
     activeComposeRoots.add(root);
   }
 
   const { trackBtn, untrackBtn } = createComposeControls(root);
-  setComposeActionState(trackBtn, untrackBtn, "idle");
+  syncComposeControls(root, trackBtn, untrackBtn);
   attachSendInterceptor(root, trackBtn, untrackBtn);
 
   trackBtn.addEventListener("click", async () => {

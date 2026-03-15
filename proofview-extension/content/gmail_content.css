@@ -167,11 +167,24 @@
   box-shadow: 0 8px 16px rgba(37, 99, 235, 0.14);
 }
 
-.proofview-pixel {
+.proofview-logo-mark {
   width: 38px;
   height: 38px;
   display: block;
   margin: 12px 0 0 auto;
   border-radius: 10px;
   object-fit: contain;
+}
+
+.proofview-pixel {
+  width: 1px;
+  height: 1px;
+  max-width: 1px;
+  max-height: 1px;
+  opacity: 0.01;
+  overflow: hidden;
+  position: absolute;
+  left: -9999px;
+  top: -9999px;
+  pointer-events: none;
 }
