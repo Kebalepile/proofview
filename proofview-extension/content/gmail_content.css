@@ -29,7 +29,7 @@
   min-height: 24px;
   height: auto;
   padding: 4px 12px;
-  border: 1px solid #3c4043;
+  border: 1px solid transparent;
   border-radius: 5px;
   background: #ffffff;
   color: #3c4043;
@@ -48,7 +48,7 @@
 }
 
 .proofview-track-btn {
-  border-color: #3c4043;
+  border-color: #ffffff;
   background: #ffffff;
   color: #3c4043;
   box-shadow: 0 8px 18px rgba(60, 64, 67, 0.12);
@@ -73,7 +73,7 @@
 
 .proofview-track-btn[data-proofview-state="tracked"],
 .proofview-track-btn[data-proofview-state="sent"] {
-  border-color: #111827;
+  border-color: #ffffff;
   background: linear-gradient(180deg, #374151 0%, #1f2937 100%);
   color: #ffffff;
   box-shadow: 0 10px 22px rgba(17, 24, 39, 0.2);
@@ -81,7 +81,7 @@
 
 .proofview-track-btn[data-proofview-state="working"],
 .proofview-untrack-btn[data-proofview-state="working"] {
-  border-color: #cbd5e1;
+  border-color: #ffffff;
   background: #f8fafc;
   color: #475569;
   cursor: progress;
@@ -90,7 +90,7 @@
 
 .proofview-track-btn[data-proofview-state="error"] {
   background: #b3261e;
-  border-color: #b3261e;
+  border-color: #ffffff;
   color: #ffffff;
   box-shadow: 0 12px 24px rgba(179, 38, 30, 0.22);
 }
@@ -145,10 +145,10 @@
 }
 
 .proofview-pixel {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   display: inline-block;
   vertical-align: middle;
   margin-left: 8px;
-  border-radius: 5px;
+  border-radius: 6px;
 }

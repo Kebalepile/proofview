@@ -362,6 +362,12 @@ function injectPixel(body, openUrl) {
     existing.src = openUrl;
     existing.alt = "ProofView";
     existing.title = "ProofView";
+    existing.width = 20;
+    existing.height = 20;
+    existing.setAttribute(
+      "style",
+      "display:inline-block;width:20px;height:20px;margin-left:8px;vertical-align:middle;border-radius:6px;"
+    );
     return;
   }
 
@@ -371,11 +377,11 @@ function injectPixel(body, openUrl) {
   img.title = "ProofView";
   img.className = "proofview-pixel";
   img.src = openUrl;
-  img.width = 18;
-  img.height = 18;
+  img.width = 20;
+  img.height = 20;
   img.setAttribute(
     "style",
-    "display:inline-block;width:18px;height:18px;margin-left:8px;vertical-align:middle;border-radius:5px;"
+    "display:inline-block;width:20px;height:20px;margin-left:8px;vertical-align:middle;border-radius:6px;"
   );
 
   body.appendChild(img);
