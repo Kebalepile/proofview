@@ -1,5 +1,5 @@
 try {
-  importScripts("config.js");
+  importScripts("../shared/config.js");
 } catch (err) {
   console.warn("ProofView config.js could not be loaded.", err);
 }
@@ -177,7 +177,7 @@ async function openFocusedEntry(messageId) {
   }
 
   const focusUrl = chrome.runtime.getURL(
-    `popup.html?focus=${encodeURIComponent(safeMessageId)}`
+    `popup/popup.html?focus=${encodeURIComponent(safeMessageId)}`
   );
 
   if (self.clients?.openWindow) {
@@ -342,7 +342,7 @@ async function startPolling() {
               const meta = ensureMessageMeta(ev.messageId);
               chrome.notifications.create({
                 type: "basic",
-                iconUrl: "icons/icon48.png",
+                iconUrl: chrome.runtime.getURL("assets/icons/icon48.png"),
                 title: "Email opened",
                 message: `${meta.subject} was opened`
               });

@@ -13,27 +13,30 @@
     "https://mail.google.com/*"
   ],
   "background": {
-    "service_worker": "service_worker.js"
+    "service_worker": "background/service_worker.js"
   },
   "action": {
     "default_title": "ProofView",
-    "default_popup": "popup.html"
+    "default_popup": "popup/popup.html"
   },
   "content_scripts": [
     {
       "matches": [
         "https://mail.google.com/*"
       ],
+      "css": [
+        "content/gmail_content.css"
+      ],
       "js": [
-        "config.js",
-        "gmail_content.js"
+        "shared/config.js",
+        "content/gmail_content.js"
       ],
       "run_at": "document_idle"
     }
   ],
   "icons": {
-    "16": "icons/icon16.png",
-    "48": "icons/icon48.png",
-    "128": "icons/icon128.png"
+    "16": "assets/icons/icon16.png",
+    "48": "assets/icons/icon48.png",
+    "128": "assets/icons/icon128.png"
   }
 }

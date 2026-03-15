@@ -9,13 +9,17 @@
 /** @type {WeakMap<HTMLElement, {
  *   messageId: string,
  *   tracked: boolean,
- *   sent: boolean
+ *   sent: boolean,
+ *   sending?: boolean
  * }>} */
 const composeState = new WeakMap();
+const activeComposeRoots = new Set();
 const bridgedOpenUrls = new Set();
-const COMPOSE_BUTTON_STYLE_ID = "proofview-compose-button-style";
-const ROW_BADGE_STYLE_ID = "proofview-row-badge-style";
+const cleanupMessageIds = new Set();
 const LOCAL_OPEN_URL_RE = buildLocalOpenUrlPattern(
+  globalThis.PROOFVIEW_EXTENSION_CONFIG?.serverBaseUrl || ""
+);
+const PROOFVIEW_SERVER_BASE_URL = normalizeBaseUrl(
   globalThis.PROOFVIEW_EXTENSION_CONFIG?.serverBaseUrl || ""
 );
 let trackedMessages = [];
@@ -64,6 +68,79 @@ function sendExtensionMessage(message) {
       resolve(response);
     });
   });
+}
+
+function decodeBase64UrlJson(value) {
+  try {
+    const normalized = String(value || "").replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4);
+    return JSON.parse(atob(padded));
+  } catch {
+    return null;
+  }
+}
+
+function parseProofViewUrl(rawUrl, kind) {
+  try {
+    const parsed = new URL(rawUrl || "", window.location.href);
+    if (!PROOFVIEW_SERVER_BASE_URL) {
+      return null;
+    }
+
+    const base = new URL(PROOFVIEW_SERVER_BASE_URL);
+    if (parsed.origin !== base.origin) {
+      return null;
+    }
+
+    const prefix = `/t/${kind}/`;
+    if (!parsed.pathname.startsWith(prefix)) {
+      return null;
+    }
+
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function isProofViewOpenUrl(rawUrl) {
+  const parsed = parseProofViewUrl(rawUrl, "o");
+  return !!parsed && /\.png$/i.test(parsed.pathname);
+}
+
+function decodeTrackedLinkTarget(rawUrl) {
+  const parsed = parseProofViewUrl(rawUrl, "l");
+  if (!parsed) {
+    return "";
+  }
+
+  const token = parsed.pathname.replace(/^\/t\/l\//, "");
+  const payloadB64 = token.split(".")[0] || "";
+  const payload = decodeBase64UrlJson(payloadB64);
+  return typeof payload?.url === "string" ? payload.url : "";
+}
+
+async function deleteTrackedMessage(messageId) {
+  if (!messageId || cleanupMessageIds.has(messageId)) {
+    return;
+  }
+
+  cleanupMessageIds.add(messageId);
+
+  try {
+    const response = await sendExtensionMessage({
+      type: "proofview:delete-message",
+      messageId
+    });
+
+    if (!response?.ok) {
+      throw new Error(response?.error || "Delete tracked message failed");
+    }
+  } catch (err) {
+    console.debug("ProofView unsent cleanup skipped:", err);
+  } finally {
+    cleanupMessageIds.delete(messageId);
+  }
 }
 
 function normalizeText(value) {
@@ -126,153 +203,6 @@ function loadTrackedMessages() {
   });
 }
 
-function hasVisiblePaint(value) {
-  return typeof value === "string" && value && value !== "rgba(0, 0, 0, 0)" && value !== "transparent";
-}
-
-function ensureComposeButtonStyles() {
-  if (document.getElementById(COMPOSE_BUTTON_STYLE_ID)) {
-    return;
-  }
-
-  const style = document.createElement("style");
-  style.id = COMPOSE_BUTTON_STYLE_ID;
-  style.textContent = `
-    .proofview-track-btn {
-      position: absolute;
-      top: 10px;
-      left: 50%;
-      z-index: 999999;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      min-height: 24px;
-      height: auto;
-      padding: 4px 12px;
-      border: 1px solid var(--pv-track-border, #0b57d0);
-      border-radius: 5px;
-      background: var(--pv-track-bg, #0b57d0);
-      color: var(--pv-track-fg, #ffffff);
-      font-size: 12px;
-      font-weight: 700;
-      line-height: 1.2;
-      letter-spacing: 0.01em;
-      cursor: pointer;
-      box-shadow: 0 12px 24px rgba(11, 87, 208, 0.22);
-      transform: translateX(-50%) translateY(0);
-      transition:
-        transform 160ms ease,
-        box-shadow 160ms ease,
-        filter 160ms ease,
-        opacity 160ms ease;
-    }
-
-    .proofview-track-btn:hover:not(:disabled) {
-      transform: translateX(-50%) translateY(-1px);
-      filter: brightness(1.04);
-      box-shadow: 0 16px 28px rgba(11, 87, 208, 0.28);
-    }
-
-    .proofview-track-btn:active:not(:disabled) {
-      transform: translateX(-50%) translateY(0);
-      filter: brightness(0.98);
-      box-shadow: 0 8px 18px rgba(11, 87, 208, 0.22);
-    }
-
-    .proofview-track-btn[data-proofview-state="tracked"] {
-      filter: saturate(0.94);
-    }
-
-    .proofview-track-btn[data-proofview-state="working"] {
-      cursor: progress;
-      opacity: 0.92;
-    }
-
-    .proofview-track-btn[data-proofview-state="error"] {
-      background: #b3261e;
-      border-color: #b3261e;
-      color: #ffffff;
-      box-shadow: 0 12px 24px rgba(179, 38, 30, 0.22);
-    }
-  `;
-
-  document.head.appendChild(style);
-}
-
-function getComposeButtonTheme(root) {
-  const fallback = {
-    background: "#0b57d0",
-    color: "#ffffff",
-    border: "#0b57d0"
-  };
-  const sendBtn = findSendButton(root);
-  if (!sendBtn) {
-    return fallback;
-  }
-
-  const style = window.getComputedStyle(sendBtn);
-  return {
-    background: hasVisiblePaint(style.backgroundColor) ? style.backgroundColor : fallback.background,
-    color: hasVisiblePaint(style.color) ? style.color : fallback.color,
-    border: hasVisiblePaint(style.borderColor) ? style.borderColor : fallback.border
-  };
-}
-
-function applyComposeButtonTheme(btn, root) {
-  const theme = getComposeButtonTheme(root);
-  btn.style.setProperty("--pv-track-bg", theme.background);
-  btn.style.setProperty("--pv-track-fg", theme.color);
-  btn.style.setProperty("--pv-track-border", theme.border || theme.background);
-}
-
-function ensureRowBadgeStyles() {
-  if (document.getElementById(ROW_BADGE_STYLE_ID)) {
-    return;
-  }
-
-  const style = document.createElement("style");
-  style.id = ROW_BADGE_STYLE_ID;
-  style.textContent = `
-    .proofview-row-badge {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      min-width: 26px;
-      height: 20px;
-      margin-left: 8px;
-      padding: 0 7px;
-      border: 1px solid rgba(122, 135, 153, 0.34);
-      border-radius: 999px;
-      background: rgba(235, 239, 244, 0.88);
-      color: #59677a;
-      font-size: 11px;
-      font-weight: 700;
-      line-height: 1;
-      cursor: pointer;
-      transition:
-        transform 160ms ease,
-        box-shadow 160ms ease,
-        border-color 160ms ease,
-        background 160ms ease,
-        color 160ms ease;
-    }
-
-    .proofview-row-badge:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 8px 18px rgba(17, 24, 39, 0.12);
-    }
-
-    .proofview-row-badge[data-state="opened"] {
-      border-color: rgba(37, 99, 235, 0.28);
-      background: rgba(219, 234, 254, 0.96);
-      color: #1d4ed8;
-      box-shadow: 0 8px 16px rgba(37, 99, 235, 0.14);
-    }
-  `;
-
-  document.head.appendChild(style);
-}
-
 function findMessageListRows() {
   return Array.from(document.querySelectorAll('tr[role="row"]')).filter((row) => {
     return !!row.querySelector("td") && !row.closest('div[role="dialog"]');
@@ -318,7 +248,7 @@ async function openTrackedEntry(messageId) {
   }
 
   const focusUrl = chrome.runtime.getURL(
-    `popup.html?focus=${encodeURIComponent(messageId)}`
+    `popup/popup.html?focus=${encodeURIComponent(messageId)}`
   );
   window.open(focusUrl, "_blank", "noopener");
   return response;
@@ -437,18 +367,10 @@ function injectPixel(body, openUrl) {
   img.setAttribute("data-proofview", "pixel");
   img.alt = "ProofView tracking pixel";
   img.title = "ProofView tracking pixel";
+  img.className = "proofview-pixel";
   img.src = openUrl;
   img.width = 12;
   img.height = 12;
-  img.style.cssText = [
-    "width:12px",
-    "height:12px",
-    "display:inline-block",
-    "vertical-align:middle",
-    "margin-left:6px",
-    "border:1px solid #111",
-    "border-radius:2px"
-  ].join(";");
 
   body.appendChild(img);
 }
@@ -469,20 +391,45 @@ function rewriteLinks(body, linkMap) {
   return count;
 }
 
-function createTrackButton(root) {
-  ensureComposeButtonStyles();
+function cleanupStaleTrackedMarkup(root) {
+  const body = findMessageBody(root);
+  if (!body) {
+    return;
+  }
 
+  const trackedImages = Array.from(body.querySelectorAll("img")).filter((img) => {
+    return (
+      img.getAttribute("data-proofview") === "pixel" ||
+      isProofViewOpenUrl(img.getAttribute("src")) ||
+      isProofViewOpenUrl(img.getAttribute("data-canonical-src"))
+    );
+  });
+
+  for (const img of trackedImages) {
+    img.remove();
+  }
+
+  const anchors = Array.from(body.querySelectorAll("a[href]"));
+  for (const anchor of anchors) {
+    const href = anchor.getAttribute("href") || "";
+    const originalUrl = decodeTrackedLinkTarget(href);
+    if (originalUrl) {
+      anchor.setAttribute("href", originalUrl);
+    }
+  }
+}
+
+function createTrackButton(root) {
   const btn = document.createElement("button");
   btn.type = "button";
   btn.textContent = "Track Email";
   btn.setAttribute("data-proofview", "track-btn");
   btn.className = "proofview-track-btn";
   btn.dataset.proofviewState = "idle";
-  applyComposeButtonTheme(btn, root);
 
   const computed = window.getComputedStyle(root);
   if (computed.position === "static") {
-    root.style.position = "relative";
+    root.classList.add("proofview-compose-root");
   }
 
   root.appendChild(btn);
@@ -567,8 +514,6 @@ function bridgeVisibleTrackedOpens() {
 }
 
 function updateVisibleRowBadges() {
-  ensureRowBadgeStyles();
-
   const rows = findMessageListRows();
   for (const row of rows) {
     upsertRowBadge(row, findTrackedEntryForRow(row));
@@ -599,19 +544,47 @@ function attachSendInterceptor(root, trackBtn) {
       if (!state?.tracked || state.sent) return;
 
       try {
+        state.sending = true;
+        composeState.set(root, state);
         await markSent(state.messageId, getDraftSubject(root));
 
+        state.sending = false;
         state.sent = true;
         composeState.set(root, state);
 
         setButtonState(trackBtn, true, "sent");
       } catch (err) {
+        state.sending = false;
+        composeState.set(root, state);
         const msg = err instanceof Error ? err.message : String(err);
         alert(`ProofView send-state error: ${msg}`);
       }
     },
     true
   );
+}
+
+function handleRemovedComposeRoot(root) {
+  activeComposeRoots.delete(root);
+
+  const state = composeState.get(root);
+  composeState.delete(root);
+
+  if (!state?.tracked || state.sent || state.sending) {
+    return;
+  }
+
+  deleteTrackedMessage(state.messageId);
+}
+
+function reconcileComposeRoots(currentRoots) {
+  const currentSet = new Set(currentRoots);
+
+  for (const root of Array.from(activeComposeRoots)) {
+    if (!currentSet.has(root)) {
+      handleRemovedComposeRoot(root);
+    }
+  }
 }
 
 function ensureComposeIntegration(root) {
@@ -621,11 +594,14 @@ function ensureComposeIntegration(root) {
   if (!body) return;
 
   if (!composeState.has(root)) {
+    cleanupStaleTrackedMarkup(root);
     composeState.set(root, {
       messageId: generateMessageId(),
       tracked: false,
-      sent: false
+      sent: false,
+      sending: false
     });
+    activeComposeRoots.add(root);
   }
 
   const btn = createTrackButton(root);
@@ -658,13 +634,18 @@ function ensureComposeIntegration(root) {
         subject: getDraftSubject(root)
       });
 
+      if (!root.isConnected) {
+        deleteTrackedMessage(state.messageId);
+        return;
+      }
+
       injectPixel(bodyEl, minted.openUrl);
-      const rewritten = rewriteLinks(bodyEl, minted.linkMap || {});
+      rewriteLinks(bodyEl, minted.linkMap || {});
 
       state.tracked = true;
       composeState.set(root, state);
 
-      setButtonState(btn, true, `${rewritten} links`);
+      setButtonState(btn, true);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       alert(`ProofView error: ${msg}`);
@@ -677,6 +658,7 @@ function ensureComposeIntegration(root) {
 
 function scan() {
   const roots = findComposeRoots();
+  reconcileComposeRoots(roots);
   for (const r of roots) ensureComposeIntegration(r);
 
   bridgeVisibleTrackedOpens();

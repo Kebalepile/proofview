@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <div class="header">
+        <div class="header-top">
+          <div class="brand">
+            <img class="brand-mark" src="../assets/icons/icon48.png" alt="ProofView logo" />
+            <div class="brand-copy">
+              <p class="brand-kicker">Live Tracking</p>
+              <h1>ProofView</h1>
+              <p class="brand-subtitle">Keep a pulse on what gets opened and when.</p>
+            </div>
+          </div>
+
+          <div class="menu-wrap">
+            <button
+              id="menuBtn"
+              class="menu-btn"
+              type="button"
+              aria-label="Open menu"
+              aria-expanded="false"
+              aria-controls="menuPanel"
+            >
+              <span></span>
+              <span></span>
+              <span></span>
+            </button>
+
+            <div id="menuPanel" class="menu-panel" data-open="false">
+              <button id="closePopupBtn" class="menu-item" type="button">
+                <span class="menu-item-label">Close</span>
+                <span class="menu-item-icon" aria-hidden="true">&times;</span>
+              </button>
+              <button id="deleteAllBtn" class="menu-item danger" type="button">
+                <span class="menu-item-label">Delete All Tracked</span>
+                <span class="menu-item-icon" aria-hidden="true">&#128465;</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div id="statusNote" class="status-note"></div>
+      </div>
+
+      <div id="messages"></div>
+    </div>
+
+    <div id="confirmBackdrop" class="modal-backdrop" hidden>
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
+        <h2 id="confirmTitle" class="modal-title">Delete tracked email?</h2>
+        <p id="confirmCopy" class="modal-copy"></p>
+        <div class="modal-actions">
+          <button id="cancelDeleteBtn" class="modal-btn cancel" type="button">No</button>
+          <button id="confirmDeleteBtn" class="modal-btn confirm" type="button">Yes, Delete</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

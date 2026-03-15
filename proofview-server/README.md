@@ -32,7 +32,7 @@ Notes:
 npm start
 ```
 
-`npm start` also syncs `proofview-extension/config.js` and `proofview-extension/manifest.json` from `proofview-server/.env`.
+`npm start` also syncs `proofview-extension/shared/config.js` and `proofview-extension/manifest.json` from `proofview-server/.env`.
 
 ## Extension Sync Only
 
