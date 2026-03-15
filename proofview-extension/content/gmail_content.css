@@ -2,11 +2,27 @@
   position: relative;
 }
 
-.proofview-track-btn {
+.proofview-compose-actions {
   position: absolute;
   top: 10px;
   left: 50%;
   z-index: 999999;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow:
+    0 16px 34px rgba(15, 23, 42, 0.16),
+    0 2px 8px rgba(15, 23, 42, 0.08);
+  backdrop-filter: blur(8px);
+  transform: translateX(-50%);
+}
+
+.proofview-track-btn,
+.proofview-untrack-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -22,34 +38,54 @@
   line-height: 1.2;
   letter-spacing: 0.01em;
   cursor: pointer;
-  box-shadow: 0 10px 22px rgba(60, 64, 67, 0.16);
-  transform: translateX(-50%) translateY(0);
   transition:
     transform 160ms ease,
     box-shadow 160ms ease,
-    filter 160ms ease,
+    background 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease,
     opacity 160ms ease;
 }
 
-.proofview-track-btn:hover:not(:disabled) {
-  transform: translateX(-50%) translateY(-1px);
-  filter: brightness(1.04);
-  box-shadow: 0 14px 24px rgba(60, 64, 67, 0.2);
+.proofview-track-btn {
+  border-color: #3c4043;
+  background: #ffffff;
+  color: #3c4043;
+  box-shadow: 0 8px 18px rgba(60, 64, 67, 0.12);
 }
 
-.proofview-track-btn:active:not(:disabled) {
-  transform: translateX(-50%) translateY(0);
-  filter: brightness(0.98);
-  box-shadow: 0 8px 16px rgba(60, 64, 67, 0.14);
+.proofview-untrack-btn {
+  border-color: #d93025;
+  background: linear-gradient(180deg, #fff4f2 0%, #fee7e4 100%);
+  color: #b42318;
+  box-shadow: 0 8px 18px rgba(217, 48, 37, 0.14);
 }
 
-.proofview-track-btn[data-proofview-state="tracked"] {
-  filter: saturate(0.94);
+.proofview-track-btn:hover:not(:disabled),
+.proofview-untrack-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
 }
 
-.proofview-track-btn[data-proofview-state="working"] {
+.proofview-track-btn:active:not(:disabled),
+.proofview-untrack-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.proofview-track-btn[data-proofview-state="tracked"],
+.proofview-track-btn[data-proofview-state="sent"] {
+  border-color: #111827;
+  background: linear-gradient(180deg, #374151 0%, #1f2937 100%);
+  color: #ffffff;
+  box-shadow: 0 10px 22px rgba(17, 24, 39, 0.2);
+}
+
+.proofview-track-btn[data-proofview-state="working"],
+.proofview-untrack-btn[data-proofview-state="working"] {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+  color: #475569;
   cursor: progress;
-  opacity: 0.92;
+  opacity: 0.95;
 }
 
 .proofview-track-btn[data-proofview-state="error"] {
@@ -57,6 +93,19 @@
   border-color: #b3261e;
   color: #ffffff;
   box-shadow: 0 12px 24px rgba(179, 38, 30, 0.22);
+}
+
+.proofview-track-btn:disabled,
+.proofview-untrack-btn:disabled {
+  transform: none;
+}
+
+.proofview-track-btn:disabled:not([data-proofview-state="working"]) {
+  cursor: default;
+}
+
+.proofview-untrack-btn[hidden] {
+  display: none;
 }
 
 .proofview-row-badge {
@@ -96,11 +145,10 @@
 }
 
 .proofview-pixel {
-  width: 12px;
-  height: 12px;
+  width: 18px;
+  height: 18px;
   display: inline-block;
   vertical-align: middle;
-  margin-left: 6px;
-  border: 1px solid #111111;
-  border-radius: 2px;
+  margin-left: 8px;
+  border-radius: 5px;
 }

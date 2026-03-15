@@ -360,17 +360,23 @@ function injectPixel(body, openUrl) {
   const existing = body.querySelector('img[data-proofview="pixel"]');
   if (existing) {
     existing.src = openUrl;
+    existing.alt = "ProofView";
+    existing.title = "ProofView";
     return;
   }
 
   const img = document.createElement("img");
   img.setAttribute("data-proofview", "pixel");
-  img.alt = "ProofView tracking pixel";
-  img.title = "ProofView tracking pixel";
+  img.alt = "ProofView";
+  img.title = "ProofView";
   img.className = "proofview-pixel";
   img.src = openUrl;
-  img.width = 12;
-  img.height = 12;
+  img.width = 18;
+  img.height = 18;
+  img.setAttribute(
+    "style",
+    "display:inline-block;width:18px;height:18px;margin-left:8px;vertical-align:middle;border-radius:5px;"
+  );
 
   body.appendChild(img);
 }
@@ -383,6 +389,10 @@ function rewriteLinks(body, linkMap) {
     const href = a.getAttribute("href") || "";
     const tracked = linkMap[href];
     if (tracked && tracked !== href) {
+      if (!a.hasAttribute("data-proofview-original-href")) {
+        a.setAttribute("data-proofview-original-href", href);
+      }
+
       a.setAttribute("href", tracked);
       count += 1;
     }
@@ -391,12 +401,7 @@ function rewriteLinks(body, linkMap) {
   return count;
 }
 
-function cleanupStaleTrackedMarkup(root) {
-  const body = findMessageBody(root);
-  if (!body) {
-    return;
-  }
-
+function removeTrackedImages(body) {
   const trackedImages = Array.from(body.querySelectorAll("img")).filter((img) => {
     return (
       img.getAttribute("data-proofview") === "pixel" ||
@@ -408,32 +413,64 @@ function cleanupStaleTrackedMarkup(root) {
   for (const img of trackedImages) {
     img.remove();
   }
+}
 
+function restoreTrackedLinks(body) {
   const anchors = Array.from(body.querySelectorAll("a[href]"));
   for (const anchor of anchors) {
     const href = anchor.getAttribute("href") || "";
-    const originalUrl = decodeTrackedLinkTarget(href);
+    const originalUrl =
+      anchor.getAttribute("data-proofview-original-href") ||
+      decodeTrackedLinkTarget(href);
+
     if (originalUrl) {
       anchor.setAttribute("href", originalUrl);
     }
+
+    anchor.removeAttribute("data-proofview-original-href");
   }
 }
 
-function createTrackButton(root) {
-  const btn = document.createElement("button");
-  btn.type = "button";
-  btn.textContent = "Track Email";
-  btn.setAttribute("data-proofview", "track-btn");
-  btn.className = "proofview-track-btn";
-  btn.dataset.proofviewState = "idle";
+function cleanupStaleTrackedMarkup(root) {
+  const body = findMessageBody(root);
+  if (!body) {
+    return;
+  }
+
+  removeTrackedImages(body);
+  restoreTrackedLinks(body);
+}
+
+function createComposeControls(root) {
+  const actions = document.createElement("div");
+  actions.className = "proofview-compose-actions";
+  actions.setAttribute("data-proofview", "compose-actions");
+
+  const trackBtn = document.createElement("button");
+  trackBtn.type = "button";
+  trackBtn.textContent = "Track Email";
+  trackBtn.setAttribute("data-proofview", "track-btn");
+  trackBtn.className = "proofview-track-btn";
+  trackBtn.dataset.proofviewState = "idle";
+
+  const untrackBtn = document.createElement("button");
+  untrackBtn.type = "button";
+  untrackBtn.textContent = "Untrack";
+  untrackBtn.setAttribute("data-proofview", "untrack-btn");
+  untrackBtn.className = "proofview-untrack-btn";
+  untrackBtn.dataset.proofviewState = "idle";
+  untrackBtn.hidden = true;
 
   const computed = window.getComputedStyle(root);
   if (computed.position === "static") {
     root.classList.add("proofview-compose-root");
   }
 
-  root.appendChild(btn);
-  return btn;
+  actions.appendChild(trackBtn);
+  actions.appendChild(untrackBtn);
+  root.appendChild(actions);
+
+  return { trackBtn, untrackBtn };
 }
 
 function setButtonState(btn, tracked, extra = "") {
@@ -452,6 +489,51 @@ function setButtonState(btn, tracked, extra = "") {
   } else {
     btn.textContent = extra ? `Track Email (${extra})` : "Track Email";
   }
+}
+
+function setComposeActionState(trackBtn, untrackBtn, mode, label = "") {
+  const nextMode = typeof mode === "string" ? mode : "idle";
+  const trackLabel =
+    label ||
+    (
+      {
+        idle: "Track Email",
+        working: "Working...",
+        tracked: "Tracked",
+        sent: "Sent",
+        error: "Try Again"
+      }[nextMode] || "Track Email"
+    );
+
+  trackBtn.dataset.proofviewState = nextMode;
+  untrackBtn.dataset.proofviewState = nextMode;
+  trackBtn.textContent = trackLabel;
+  untrackBtn.textContent = "Untrack";
+
+  trackBtn.disabled =
+    nextMode === "working" || nextMode === "tracked" || nextMode === "sent";
+  untrackBtn.hidden = nextMode !== "tracked";
+  untrackBtn.disabled = nextMode === "working";
+}
+
+function resetComposeTracking(root) {
+  composeState.set(root, {
+    messageId: generateMessageId(),
+    tracked: false,
+    sent: false,
+    sending: false
+  });
+}
+
+async function untrackDraft(root) {
+  const state = composeState.get(root);
+  if (!state?.tracked || state.sent) {
+    return;
+  }
+
+  cleanupStaleTrackedMarkup(root);
+  await deleteTrackedMessage(state.messageId);
+  resetComposeTracking(root);
 }
 
 async function mintBatch(payload) {
@@ -528,7 +610,7 @@ function findSendButton(root) {
   );
 }
 
-function attachSendInterceptor(root, trackBtn) {
+function attachSendInterceptor(root, trackBtn, untrackBtn) {
   if (root.dataset.proofviewSendHook === "1") return;
   root.dataset.proofviewSendHook = "1";
 
@@ -552,7 +634,7 @@ function attachSendInterceptor(root, trackBtn) {
         state.sent = true;
         composeState.set(root, state);
 
-        setButtonState(trackBtn, true, "sent");
+        setComposeActionState(trackBtn, untrackBtn, "sent");
       } catch (err) {
         state.sending = false;
         composeState.set(root, state);
@@ -588,41 +670,34 @@ function reconcileComposeRoots(currentRoots) {
 }
 
 function ensureComposeIntegration(root) {
-  if (root.querySelector('button[data-proofview="track-btn"]')) return;
+  if (root.querySelector('[data-proofview="compose-actions"]')) return;
 
   const body = findMessageBody(root);
   if (!body) return;
 
   if (!composeState.has(root)) {
     cleanupStaleTrackedMarkup(root);
-    composeState.set(root, {
-      messageId: generateMessageId(),
-      tracked: false,
-      sent: false,
-      sending: false
-    });
+    resetComposeTracking(root);
     activeComposeRoots.add(root);
   }
 
-  const btn = createTrackButton(root);
-  setButtonState(btn, false);
-  attachSendInterceptor(root, btn);
+  const { trackBtn, untrackBtn } = createComposeControls(root);
+  setComposeActionState(trackBtn, untrackBtn, "idle");
+  attachSendInterceptor(root, trackBtn, untrackBtn);
 
-  btn.addEventListener("click", async () => {
+  trackBtn.addEventListener("click", async () => {
     try {
-      btn.disabled = true;
-      setButtonState(btn, false, "working...");
+      setComposeActionState(trackBtn, untrackBtn, "working", "Tracking...");
 
       const state = composeState.get(root);
       const bodyEl = findMessageBody(root);
 
       if (!state || !bodyEl) {
-        setButtonState(btn, false, "no body");
+        setComposeActionState(trackBtn, untrackBtn, "error", "No message body");
         return;
       }
 
       if (state.tracked) {
-        setButtonState(btn, true, state.sent ? "sent" : "ready");
         return;
       }
 
@@ -645,13 +720,29 @@ function ensureComposeIntegration(root) {
       state.tracked = true;
       composeState.set(root, state);
 
-      setButtonState(btn, true);
+      setComposeActionState(trackBtn, untrackBtn, "tracked");
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       alert(`ProofView error: ${msg}`);
-      setButtonState(btn, false, "error");
-    } finally {
-      btn.disabled = false;
+      setComposeActionState(trackBtn, untrackBtn, "error");
+    }
+  });
+
+  untrackBtn.addEventListener("click", async () => {
+    try {
+      setComposeActionState(trackBtn, untrackBtn, "working", "Untracking...");
+      await untrackDraft(root);
+      setComposeActionState(trackBtn, untrackBtn, "idle");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      alert(`ProofView untrack error: ${msg}`);
+
+      const state = composeState.get(root);
+      setComposeActionState(
+        trackBtn,
+        untrackBtn,
+        state?.tracked ? "tracked" : "error"
+      );
     }
   });
 }

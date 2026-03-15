@@ -17,7 +17,7 @@ PROOFVIEW_PUBLIC_BASE_URL=https://proofview.onrender.com
 PROOFVIEW_SECRET=put-a-long-random-secret-here
 PROOFVIEW_OPEN_GRACE_MS=15000
 PROOFVIEW_STORAGE_FILE=./data/proofview_db.json
-PROOFVIEW_LOGO_FILE=./assets/icon.png
+PROOFVIEW_LOGO_FILE=./assets/tracking_logo.png
 PROOFVIEW_SAMPLE_DOC=./assets/sample.pdf
 ```
 

@@ -96,7 +96,7 @@ function getConfig() {
     ),
     logoFile: resolvePath(
       process.env.PROOFVIEW_LOGO_FILE,
-      "./assets/icon.png"
+      "./assets/tracking_logo.png"
     ),
     sampleDoc: resolvePath(
       process.env.PROOFVIEW_SAMPLE_DOC,
