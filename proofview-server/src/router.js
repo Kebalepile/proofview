@@ -1,4 +1,5 @@
 const { sendText } = require("./lib/http");
+const { homePage } = require("./handlers/homePage");
 const { apiMintBatch } = require("./handlers/apiMintBatch");
 const { apiEvents } = require("./handlers/apiEvents");
 const { apiMarkSent } = require("./handlers/apiMarkSent");
@@ -9,6 +10,7 @@ const { trackOpen } = require("./handlers/trackOpen");
 const { trackLink } = require("./handlers/trackLink");
 const { trackDoc } = require("./handlers/trackDoc");
 const { serveLogo } = require("./handlers/serveLogo");
+const { serveMascotSvg } = require("./handlers/serveMascotSvg");
 
 function router(req, res, deps) {
   const urlObj = new URL(req.url, deps.publicBaseUrl);
@@ -24,11 +26,15 @@ function router(req, res, deps) {
   }
 
   if (req.method === "GET" && urlObj.pathname === "/") {
-    return sendText(res, 200, "ProofView server running");
+    return homePage(res);
   }
 
   if (req.method === "GET" && urlObj.pathname === "/brand/mascot.png") {
     return serveLogo(res, deps);
+  }
+
+  if (req.method === "GET" && urlObj.pathname === "/brand/mascot.svg") {
+    return serveMascotSvg(res);
   }
 
   if (req.method === "POST" && urlObj.pathname === "/api/mint-batch") {

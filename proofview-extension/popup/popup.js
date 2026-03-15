@@ -294,10 +294,7 @@ function renderMessages(entries) {
       row.appendChild(latestOpen);
     }
 
-    const messageId = document.createElement("div");
-    messageId.className = "message-id";
-    messageId.textContent = `ID: ${entry.messageId}`;
-    row.appendChild(messageId);
+
 
     container.appendChild(row);
   }

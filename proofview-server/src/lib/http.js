@@ -38,6 +38,38 @@ function sendText(res, status, text) {
 }
 
 /**
+ * @description Send HTML response.
+ * @param {import("http").ServerResponse} res
+ * @param {number} status
+ * @param {string} html
+ * @returns {void}
+ */
+function sendHtml(res, status, html) {
+  res.writeHead(status, {
+    "Content-Type": "text/html; charset=utf-8",
+    "Access-Control-Allow-Origin": "*"
+  });
+  res.end(html);
+}
+
+/**
+ * @description Send SVG response.
+ * @param {import("http").ServerResponse} res
+ * @param {string} svg
+ * @returns {void}
+ */
+function sendSvg(res, svg) {
+  res.writeHead(200, {
+    "Content-Type": "image/svg+xml; charset=utf-8",
+    "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+    "Pragma": "no-cache",
+    "Expires": "0",
+    "Access-Control-Allow-Origin": "*"
+  });
+  res.end(svg);
+}
+
+/**
  * @description Send PNG bytes with no-cache headers.
  * @param {import("http").ServerResponse} res
  * @param {Buffer} pngBytes
@@ -94,4 +126,4 @@ function streamDownload(res, filePath, downloadName) {
   s.on("error", () => res.end());
 }
 
-module.exports = { sendJson, sendText, sendPng, redirect, streamDownload };
+module.exports = { sendJson, sendText, sendHtml, sendSvg, sendPng, redirect, streamDownload };

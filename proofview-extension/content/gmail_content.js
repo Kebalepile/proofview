@@ -22,6 +22,39 @@ const LOCAL_OPEN_URL_RE = buildLocalOpenUrlPattern(
 const PROOFVIEW_SERVER_BASE_URL = normalizeBaseUrl(
   globalThis.PROOFVIEW_EXTENSION_CONFIG?.serverBaseUrl || ""
 );
+const PROOFVIEW_MASCOT_DATA_URL = "data:image/png;base64," + [
+  "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"
+].join("");
 let trackedMessages = [];
 let scanScheduled = false;
 
@@ -37,9 +70,7 @@ function normalizeBaseUrl(baseUrl) {
 }
 
 function getMascotLogoUrl() {
-  return PROOFVIEW_SERVER_BASE_URL
-    ? `${PROOFVIEW_SERVER_BASE_URL}/brand/mascot.png`
-    : "";
+  return PROOFVIEW_MASCOT_DATA_URL;
 }
 
 function escapeRegExp(value) {
@@ -578,6 +609,13 @@ function syncComposeControls(root, trackBtn, untrackBtn) {
   const state = composeState.get(root);
 
   if (detectedState) {
+    const body = findMessageBody(root);
+    const openUrl =
+      body
+        ? Array.from(body.querySelectorAll("img"))
+          .map((img) => getOpenUrlFromImage(img))
+          .find((value) => !!value) || ""
+        : "";
     const nextState = {
       ...detectedState,
       sent:
@@ -591,6 +629,11 @@ function syncComposeControls(root, trackBtn, untrackBtn) {
     };
 
     composeState.set(root, nextState);
+
+    if (body && openUrl) {
+      injectPixel(body, openUrl);
+    }
+
     setComposeActionState(
       trackBtn,
       untrackBtn,

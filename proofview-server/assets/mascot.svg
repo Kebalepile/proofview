@@ -1,0 +1,34 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="72" y1="64" x2="432" y2="456" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#15263D" />
+      <stop offset="1" stop-color="#2E6CB6" />
+    </linearGradient>
+    <radialGradient id="iris" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(256 258) rotate(90) scale(98)">
+      <stop stop-color="#7FDBFF" />
+      <stop offset="0.55" stop-color="#4CB7F6" />
+      <stop offset="1" stop-color="#1F5FE0" />
+    </radialGradient>
+    <filter id="shadow" x="42" y="44" width="428" height="430" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="18" stdDeviation="20" flood-color="#09111D" flood-opacity="0.24" />
+    </filter>
+  </defs>
+
+  <g filter="url(#shadow)">
+    <rect x="56" y="56" width="400" height="400" rx="112" fill="url(#bg)" />
+    <path d="M128 108C222 66 334 76 416 148" stroke="white" stroke-opacity="0.12" stroke-width="24" stroke-linecap="round" />
+    <path d="M132 178C154 149 196 128 256 128C316 128 358 149 380 178" stroke="#EAF6FF" stroke-opacity="0.82" stroke-width="18" stroke-linecap="round" />
+    <path d="M114 256C148 194 194 164 256 164C318 164 364 194 398 256C364 318 318 348 256 348C194 348 148 318 114 256Z" fill="#F7FBFF" />
+    <circle cx="256" cy="256" r="98" fill="url(#iris)" />
+    <circle cx="256" cy="256" r="46" fill="#162538" />
+    <circle cx="272" cy="238" r="12" fill="white" fill-opacity="0.94" />
+    <path d="M198 356C214 374 234 384 256 384C278 384 298 374 314 356" stroke="#D7ECFF" stroke-width="18" stroke-linecap="round" />
+    <path d="M182 188C205 164 228 152 256 152C284 152 307 164 330 188" stroke="#0E1A2B" stroke-opacity="0.24" stroke-width="12" stroke-linecap="round" />
+    <g>
+      <circle cx="362" cy="362" r="58" fill="#F7FBFF" />
+      <circle cx="362" cy="362" r="48" fill="#132238" />
+      <path d="M336 364L352 380L390 340" stroke="#73E0FF" stroke-width="16" stroke-linecap="round" stroke-linejoin="round" />
+      <path d="M326 338L344 356" stroke="white" stroke-opacity="0.2" stroke-width="10" stroke-linecap="round" />
+    </g>
+  </g>
+</svg>
